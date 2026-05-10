@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
-import Providers from "@/components/Providers"; // 1. Providers 임포트
+import Providers from "@/components/Providers";
 
 // 폰트 설정
 const geistSans = Geist({
@@ -15,10 +15,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// 메타데이터 설정
+// 사이트 정보 설정
 export const metadata: Metadata = {
   title: "가물치 경매",
-  description: "세상에서 가장 신선한 경매 사이트",
+  description: "뿌요님의 멋진 경매 사이트",
 };
 
 export default function RootLayout({
@@ -32,9 +32,12 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        {/* 2. Providers로 전체를 감싸서 로그인 정보를 공유합니다 */}
+        {/* 1. Providers가 가장 바깥에서 로그인 정보를 관리합니다 */}
         <Providers>
+          {/* 2. Navbar가 로그인 정보를 받아와서 적절히 보여줍니다 */}
           <Navbar />
+          
+          {/* 3. 실제 페이지 내용이 표시되는 곳 */}
           <main className="flex-grow">
             {children}
           </main>
