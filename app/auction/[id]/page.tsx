@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { supabase } from '@/app/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { useSession, SessionProvider } from 'next-auth/react';
 
 function AuctionDetailContent() {
