@@ -1,6 +1,7 @@
-import { supabase } from "@/lib/supabase"; // 또는 "../../../lib/supabase" (경로 확인!)
+import { supabase } from '../../../lib/supabase';
 import { notFound } from "next/navigation";
 import BidForm from "@/components/BidForm"; // 또는 "../../../components/BidForm"
+import { useEffect, useState } from 'react';
 
 export const revalidate = 0;
 
