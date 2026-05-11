@@ -1,33 +1,35 @@
 import { supabase } from "@/lib/supabase";
 import ItemCard from "../components/ItemCard";
 
-// 항상 최신 데이터를 가져오도록 설정
-export const revalidate = 0; 
+export const revalidate = 0;
 
 export default async function Home() {
-  // 1. Supabase의 'items' 테이블에서 데이터를 가져옵니다.
   const { data: items, error } = await supabase
     .from('items')
     .select('*')
-    .order('id', { ascending: false });
+    .order('created_at', { ascending: false });
 
-  // 에러가 났을 때 화면
   if (error) {
-    return <div className="p-10 text-red-500">데이터를 불러오는 중 에러가 발생했습니다: {error.message}</div>;
+    return <div className="p-10 text-red-500">에러 발생: {error.message}</div>;
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
-      <h2 className="text-2xl font-bold mb-6">진행 중인 경매 🎣</h2>
+    <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
+      <div className="flex justify-between items-end mb-8">
+        <div>
+          <h2 className="text-2xl md:text-3xl font-black text-gray-900">진행 중인 경매 🔥</h2>
+          <p className="text-gray-500 text-sm md:text-base mt-1">지금 바로 입찰해보세요!</p>
+        </div>
+      </div>
       
-      {/* 2. 데이터가 없을 때와 있을 때 화면 다르게 보여주기 */}
       {!items || items.length === 0 ? (
-        <div className="text-center py-20 text-gray-500 text-xl">
-          아직 등록된 경매 물건이 없네요. <br/> 
-          가장 먼저 물건을 올려보시겠어요? 😊
+        <div className="text-center py-24 bg-gray-50 rounded-3xl border-2 border-dashed">
+          <span className="text-4xl mb-4 block">텅!</span>
+          <p className="text-gray-500">아직 등록된 경매가 없습니다.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        /* 핵심: 모바일 1열, 태블릿 2열, 데스크탑 3~4열로 자동 조절 */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-8">
           {items.map((item) => (
             <ItemCard key={item.id} item={item} />
           ))}
