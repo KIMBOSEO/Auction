@@ -14,6 +14,10 @@ export default function Navbar() {
       <div className="flex gap-4 items-center">
         {session ? (
           <>
+            {/* ✨ 여기 '물건 올리기' 버튼이 추가됐어요! */}
+            <Link href="/create" className="font-semibold text-blue-600 hover:text-blue-800 mr-2">
+              + 물건 올리기
+            </Link>
             <Link href="/mypage" className="text-gray-600 hover:text-black">마이페이지</Link>
             <button 
               onClick={() => signOut()}
