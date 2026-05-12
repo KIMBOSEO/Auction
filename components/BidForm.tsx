@@ -7,10 +7,9 @@ import { useRouter } from "next/navigation";
 export default function BidForm({ itemId, currentPrice }: { itemId: string, currentPrice: number }) {
   const [bidAmount, setBidAmount] = useState<number>(currentPrice + 1000);
   const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState<any>(null); // 유저 정보 상태
+  const [user, setUser] = useState<any>(null);
   const router = useRouter();
 
-  // 1. 현재 로그인한 유저가 있는지 확인
   useEffect(() => {
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -19,28 +18,39 @@ export default function BidForm({ itemId, currentPrice }: { itemId: string, curr
     getUser();
   }, []);
 
-  const handleBid = async () => {
-    if (!user) {
-      alert("로그인이 필요한 서비스입니다! 로그인 페이지로 이동할까요?");
-      router.push('/login'); // 로그인 페이지가 있다면 이동
-      return;
-    }
+  // 🔊 효과음 재생 함수
+  const playBidSound = () => {
+    const audio = new Audio('/sounds/bid-sound.mp3'); // public/sounds/ 폴더의 파일
+    audio.play().catch(e => console.log("오디오 재생 차단됨:", e));
+  };
 
-    if (bidAmount <= currentPrice) {
-      alert("현재가보다 높은 금액을 입력해주세요!");
-      return;
-    }
+  const handleBid = async () => {
+    if (!user) return alert("로그인 후 이용해주세요!");
+    if (bidAmount <= currentPrice) return alert("현재가보다 높아야 합니다!");
 
     setLoading(true);
 
-    const { error } = await supabase
+    // 1. bids 테이블에 기록 추가
+    const { error: bidError } = await supabase
+      .from('bids')
+      .insert([{ item_id: itemId, user_email: user.email, amount: bidAmount }]);
+
+    if (bidError) {
+      alert("입찰 기록 실패: " + bidError.message);
+      setLoading(false);
+      return;
+    }
+
+    // 2. items 테이블의 현재가 업데이트
+    const { error: itemError } = await supabase
       .from('items')
-      .update({ price: bidAmount, bids: Math.floor(Math.random() * 10) + 1 })
+      .update({ price: bidAmount })
       .eq('id', itemId);
 
-    if (error) {
-      alert("입찰 실패: " + error.message);
+    if (itemError) {
+      alert("가격 업데이트 실패!");
     } else {
+      playBidSound(); // 🎉 성공 시 소리 재생!
       alert("입찰 성공! 🎉");
       router.refresh();
     }
@@ -49,19 +59,22 @@ export default function BidForm({ itemId, currentPrice }: { itemId: string, curr
 
   return (
     <div className="space-y-4">
-      <input 
-        type="number" 
-        value={bidAmount}
-        onChange={(e) => setBidAmount(Number(e.target.value))}
-        className="w-full border-2 p-4 rounded-xl outline-none"
-      />
+      <div className="relative">
+        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₩</span>
+        <input 
+          type="number" 
+          value={bidAmount}
+          onChange={(e) => setBidAmount(Number(e.target.value))}
+          className="w-full border-2 border-blue-100 p-4 pl-10 rounded-2xl outline-none focus:border-blue-500 transition-all font-black text-xl text-blue-600"
+        />
+      </div>
       <button 
         onClick={handleBid}
-        disabled={loading}
-        className={`w-full p-5 rounded-xl font-bold text-xl text-white
-          ${!user ? 'bg-gray-400' : (loading ? 'bg-blue-300' : 'bg-blue-600 hover:bg-blue-700')}`}
+        disabled={loading || !user}
+        className={`w-full p-5 rounded-2xl font-black text-xl transition-all shadow-xl active:scale-95
+          ${!user ? 'bg-gray-200 text-gray-400' : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700'}`}
       >
-        {!user ? "로그인 후 입찰 가능" : (loading ? "처리 중..." : "입찰하기 🔨")}
+        {!user ? "로그인이 필요합니다" : (loading ? "입찰 처리 중..." : "지금 입찰하기 🔨")}
       </button>
     </div>
   );
