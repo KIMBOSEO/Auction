@@ -14,8 +14,7 @@ export default function CreateItem() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  // 🌟 여기도 메인 페이지와 똑같이 맞춰주세요!
-  const categories = ["전자기기", "스포츠/레저", "패션/잡화", "취미", "희귀카드", "기타"];
+  const categories = ["전자기기", "스포츠/레저", "패션/잡화", "취미", "희귀어종", "기타"];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,13 +23,29 @@ export default function CreateItem() {
     setLoading(true);
     let imageUrl = '';
 
+    // 🌟 이미지 업로드 로직 강화
     if (file) {
       const fileName = `${Date.now()}_${file.name}`;
-      const { data, error: uploadError } = await supabase.storage.from('item-images').upload(fileName, file);
-      if (!uploadError) {
-        const { data: { publicUrl } } = supabase.storage.from('item-images').getPublicUrl(fileName);
-        imageUrl = publicUrl;
+      console.log("업로드 시도 중:", fileName);
+
+      // 버킷 이름 확인: 'item-images' 혹은 'item_images'
+      const { data, error: uploadError } = await supabase.storage
+        .from('item_images') 
+        .upload(fileName, file);
+
+      if (uploadError) {
+        console.error("스토리지 업로드 상세 에러:", uploadError);
+        alert("이미지 창고 저장 실패: " + uploadError.message);
+        setLoading(false);
+        return;
       }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('item_images')
+        .getPublicUrl(fileName);
+      
+      imageUrl = publicUrl;
+      console.log("이미지 주소 획득 성공:", imageUrl);
     }
 
     const endAt = new Date();
@@ -38,14 +53,14 @@ export default function CreateItem() {
 
     const { data: { user } } = await supabase.auth.getUser();
     
-    // 이제 user_id 컬럼을 만들었으니 에러가 나지 않습니다!
     const { error } = await supabase.from('items').insert([{ 
       title, price: Number(price), description, category,
       image_url: imageUrl, end_at: endAt.toISOString(), user_id: user?.id, bids: 0 
     }]);
 
     if (error) {
-      alert("등록 실패: " + error.message);
+      console.error("DB 저장 상세 에러:", error);
+      alert("데이터 저장 실패: " + error.message);
     } else {
       alert("성공적으로 등록되었습니다! 🚀");
       router.push('/');
@@ -60,7 +75,12 @@ export default function CreateItem() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-8">
         <div className="flex flex-col gap-3">
           <label className="font-black text-gray-700 ml-1">물건 사진</label>
-          <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} className="border-2 border-dashed p-10 rounded-3xl text-sm bg-gray-50 hover:bg-gray-100 transition cursor-pointer" />
+          <input 
+            type="file" 
+            accept="image/*" 
+            onChange={(e) => setFile(e.target.files?.[0] || null)} 
+            className="border-2 border-dashed p-10 rounded-3xl text-sm bg-gray-50 hover:bg-gray-100 transition cursor-pointer" 
+          />
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -77,26 +97,17 @@ export default function CreateItem() {
         </div>
 
         <div className="grid grid-cols-2 gap-6">
-          <div className="flex flex-col gap-3">
-            <label className="font-black text-gray-700 ml-1">시작가 (원)</label>
-            <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} className="border-2 border-gray-100 p-4 rounded-2xl outline-none focus:border-blue-500 font-bold" placeholder="10,000" />
-          </div>
-          <div className="flex flex-col gap-3">
-            <label className="font-black text-gray-700 ml-1">경매 기간</label>
-            <select value={duration} onChange={(e) => setDuration(e.target.value)} className="border-2 border-gray-100 p-4 rounded-2xl bg-white outline-none focus:border-blue-500 font-bold">
-              <option value="1">1시간</option>
-              <option value="24">24시간</option>
-              <option value="168">7일</option>
-            </select>
-          </div>
+          <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} className="border-2 border-gray-100 p-4 rounded-2xl outline-none" placeholder="시작가" />
+          <select value={duration} onChange={(e) => setDuration(e.target.value)} className="border-2 border-gray-100 p-4 rounded-2xl bg-white font-bold">
+            <option value="1">1시간</option>
+            <option value="24">24시간</option>
+            <option value="168">7일</option>
+          </select>
         </div>
 
-        <div className="flex flex-col gap-3">
-          <label className="font-black text-gray-700 ml-1">상세 설명</label>
-          <textarea rows={5} value={description} onChange={(e) => setDescription(e.target.value)} className="border-2 border-gray-100 p-5 rounded-3xl outline-none focus:border-blue-500 font-medium" placeholder="물건의 상태를 자세히 적어주세요!"></textarea>
-        </div>
-
-        <button type="submit" disabled={loading} className="font-black text-2xl p-6 rounded-[2rem] text-white bg-blue-600 hover:bg-blue-700 shadow-2xl shadow-blue-200 transition active:scale-95">
+        <textarea rows={5} value={description} onChange={(e) => setDescription(e.target.value)} className="border-2 border-gray-100 p-5 rounded-3xl outline-none" placeholder="물건의 상태를 자세히 적어주세요!"></textarea>
+        
+        <button type="submit" disabled={loading} className="font-black text-2xl p-6 rounded-[2rem] text-white bg-blue-600 hover:bg-blue-700 shadow-2xl transition active:scale-95">
           {loading ? "보물 등록 중..." : "경매 시작하기 🚀"}
         </button>
       </form>
