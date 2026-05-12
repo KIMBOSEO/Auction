@@ -41,7 +41,7 @@ export default function MyPage() {
     if (imageUrl) {
       const fileName = imageUrl.split('/').pop();
       if (fileName) {
-        await supabase.storage.from('item-images').remove([fileName]);
+        await supabase.storage.from('item_images').remove([fileName]);
       }
     }
 

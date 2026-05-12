@@ -29,7 +29,7 @@ export default function CreateItem() {
       const safeFileName = `${Date.now()}.${fileExt}`; 
 
       const { data, error: uploadError } = await supabase.storage
-        .from('item-images')
+        .from('item_images')
         .upload(safeFileName, file);
 
       if (uploadError) {
@@ -39,7 +39,7 @@ export default function CreateItem() {
       }
 
       const { data: { publicUrl } } = supabase.storage
-        .from('item-images')
+        .from('item_images')
         .getPublicUrl(safeFileName);
       
       imageUrl = publicUrl;
