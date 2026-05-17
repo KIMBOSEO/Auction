@@ -5,13 +5,15 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import ItemCard from '@/components/ItemCard';
 
-type TabType = 'uploaded' | 'liked' | 'bidding' | 'history';
+type TabType = 'uploaded' | 'history' | 'liked' | 'bidding';
 
 export default function MyPage() {
   const [user, setUser] = useState<any>(null);
+  const [nickname, setNickname] = useState('');
   const [items, setItems] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('uploaded');
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
   const router = useRouter();
 
   const fetchMyData = async (tab: TabType) => {
@@ -19,6 +21,10 @@ export default function MyPage() {
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     if (!currentUser) { router.push('/login'); return; }
     setUser(currentUser);
+
+    // 프로필(닉네임) 가져오기
+    const { data: profile } = await supabase.from('profiles').select('nickname').eq('id', currentUser.id).single();
+    if (profile?.nickname) setNickname(profile.nickname);
 
     const now = new Date().toISOString();
     let query = supabase.from('items').select('*');
@@ -41,19 +47,57 @@ export default function MyPage() {
 
   useEffect(() => { fetchMyData(activeTab); }, [activeTab]);
 
+  // 🌟 닉네임 저장 함수
+  const handleSaveNickname = async () => {
+    if (!nickname.trim()) return alert("닉네임을 입력해주세요!");
+    setUpdating(true);
+
+    const { error } = await supabase
+      .from('profiles')
+      .upsert({ id: user.id, nickname: nickname.trim(), updated_at: new Date().toISOString() });
+
+    if (error) {
+      if (error.message.includes('unique')) alert("이미 존재하는 닉네임입니다! 🤔");
+      else alert("저장 실패: " + error.message);
+    } else {
+      alert("닉네임이 설정되었습니다! 이제 안전하게 경매를 즐기세요. ✨");
+      window.location.reload();
+    }
+    setUpdating(false);
+  };
+
+  if (!user && loading) return <div className="p-20 text-center font-black">가물치 창고 여는 중... 🎣</div>;
+
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-10">
-      <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-gray-100 mb-10 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-2xl shadow-lg">👤</div>
-          <div>
-            <h2 className="text-2xl font-black text-gray-800">{user?.email?.split('@')[0]}님</h2>
-            <p className="text-sm text-gray-400 font-bold">가물치 경매장 멤버</p>
+      {/* 🌟 개인정보 보호를 위한 닉네임 설정 섹션 */}
+      <div className="bg-white rounded-[2.5rem] p-8 shadow-xl border border-blue-50 mb-10 flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="flex items-center gap-6 w-full md:w-auto">
+          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-2xl shadow-lg text-white">👤</div>
+          <div className="flex-1">
+            <label className="text-xs font-black text-blue-600 uppercase tracking-wider block mb-1">개인정보 보호 닉네임</label>
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                value={nickname} 
+                onChange={(e) => setNickname(e.target.value)}
+                placeholder="경매장에 표시될 닉네임"
+                className="border-2 border-gray-100 px-4 py-2 rounded-xl outline-none focus:border-blue-500 font-bold text-gray-700"
+              />
+              <button 
+                onClick={handleSaveNickname}
+                disabled={updating}
+                className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-700 transition"
+              >
+                {updating ? '변경 중...' : '변경'}
+              </button>
+            </div>
           </div>
         </div>
-        <button onClick={() => { supabase.auth.signOut(); router.push('/'); }} className="px-5 py-2 rounded-xl text-red-500 font-bold">로그아웃</button>
+        <button onClick={() => { supabase.auth.signOut(); router.push('/'); }} className="px-5 py-2 rounded-xl text-red-400 border border-red-50 hover:bg-red-50 font-bold transition">로그아웃</button>
       </div>
 
+      {/* 탭 메뉴 */}
       <div className="flex flex-wrap gap-3 mb-10 bg-gray-100 p-2 rounded-[2rem] w-fit">
         {[
           { id: 'uploaded', label: '진행 중' },
@@ -65,6 +109,7 @@ export default function MyPage() {
         ))}
       </div>
 
+      {/* 아이템 그리드 */}
       {loading ? (
         <div className="py-20 text-center font-bold text-gray-300">목록을 불러오고 있어요...</div>
       ) : items.length === 0 ? (

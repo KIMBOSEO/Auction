@@ -12,28 +12,37 @@ export default function CreateItem() {
   const [duration, setDuration] = useState('24');
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [userNickname, setUserNickname] = useState('');
   const router = useRouter();
 
   const categories = ["전자기기", "스포츠/레저", "패션/잡화", "취미", "희귀카드", "기타"];
 
-  // 🛡️ 로그인 체크 가드
   useEffect(() => {
-    const checkUser = async () => {
+    const checkUserAndNickname = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         alert("로그인이 필요한 서비스입니다! 🎣");
         router.push('/login');
+        return;
+      }
+      
+      // 🌟 닉네임이 있는지 검사
+      const { data: profile } = await supabase.from('profiles').select('nickname').eq('id', user.id).single();
+      if (!profile?.nickname) {
+        alert("🔒 개인정보 보호를 위해 마이페이지에서 먼저 '닉네임'을 설정해주세요!");
+        router.push('/mypage');
+      } else {
+        setUserNickname(profile.nickname);
       }
     };
-    checkUser();
+    checkUserAndNickname();
   }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !price) return alert("제목과 시작가를 입력해주세요!");
 
-    // ⚠️ 등록 전 경고창
-    const confirmMsg = "⚠️ 등록 전 꼭 확인하세요!\n1. 시작가는 이후에 수정이 불가능합니다.\n2. 사진은 변경할 수 없습니다 (물건 바꿔치기 방지).\n정말 등록하시겠습니까?";
+    const confirmMsg = "⚠️ 등록 전 꼭 확인하세요!\n1. 시작가는 이후에 수정이 불가능합니다.\n2. 사진은 변경할 수 없습니다.\n정말 등록하시겠습니까?";
     if (!confirm(confirmMsg)) return;
 
     setLoading(true);
@@ -42,9 +51,7 @@ export default function CreateItem() {
     if (file) {
       const fileExt = file.name.split('.').pop();
       const safeFileName = `${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from('item_images')
-        .upload(safeFileName, file);
+      const { error: uploadError } = await supabase.storage.from('item_images').upload(safeFileName, file);
 
       if (!uploadError) {
         const { data: { publicUrl } } = supabase.storage.from('item_images').getPublicUrl(safeFileName);
@@ -56,9 +63,12 @@ export default function CreateItem() {
     endAt.setHours(endAt.getHours() + Number(duration));
 
     const { data: { user } } = await supabase.auth.getUser();
+    
+    // 🌟 데이터 등록 시 user_nickname 함께 저장
     const { error } = await supabase.from('items').insert([{ 
       title, price: Number(price), description, category,
-      image_url: imageUrl, end_at: endAt.toISOString(), user_id: user?.id, bids: 0 
+      image_url: imageUrl, end_at: endAt.toISOString(), 
+      user_id: user?.id, user_nickname: userNickname, bids: 0 
     }]);
 
     if (error) alert("등록 실패: " + error.message);
