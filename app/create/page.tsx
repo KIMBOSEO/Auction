@@ -242,30 +242,30 @@ export default function CreateItem() {
     </div>
   );
 }
-            <label className="font-black text-gray-700 ml-1">상품명</label>
-            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="border-2 border-gray-100 p-4 rounded-2xl outline-none font-bold" placeholder="상품명" />
-          </div>
-        </div>
+//             <label className="font-black text-gray-700 ml-1">상품명</label>
+//             <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="border-2 border-gray-100 p-4 rounded-2xl outline-none font-bold" placeholder="상품명" />
+//           </div>
+//         </div>
 
-        <div className="grid grid-cols-2 gap-6">
-          <div className="flex flex-col gap-3">
-            <label className="font-black text-gray-700 ml-1 italic text-red-400">시작가 (수정불가)</label>
-            <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} className="border-2 border-gray-100 p-4 rounded-2xl outline-none" placeholder="1,000" />
-          </div>
-          <div className="flex flex-col gap-3">
-            <label className="font-black text-gray-700 ml-1">경매 기간</label>
-            <select value={duration} onChange={(e) => setDuration(e.target.value)} className="border-2 border-gray-100 p-4 rounded-2xl bg-white font-bold">
-              <option value="1">1시간</option><option value="24">24시간</option><option value="168">7일</option><option value="0.05">3분</option>
-            </select>
-          </div>
-        </div>
+//         <div className="grid grid-cols-2 gap-6">
+//           <div className="flex flex-col gap-3">
+//             <label className="font-black text-gray-700 ml-1 italic text-red-400">시작가 (수정불가)</label>
+//             <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} className="border-2 border-gray-100 p-4 rounded-2xl outline-none" placeholder="1,000" />
+//           </div>
+//           <div className="flex flex-col gap-3">
+//             <label className="font-black text-gray-700 ml-1">경매 기간</label>
+//             <select value={duration} onChange={(e) => setDuration(e.target.value)} className="border-2 border-gray-100 p-4 rounded-2xl bg-white font-bold">
+//               <option value="1">1시간</option><option value="24">24시간</option><option value="168">7일</option><option value="0.05">3분</option>
+//             </select>
+//           </div>
+//         </div>
 
-        <textarea rows={5} value={description} onChange={(e) => setDescription(e.target.value)} className="border-2 border-gray-100 p-5 rounded-3xl outline-none" placeholder="상세 설명"></textarea>
+//         <textarea rows={5} value={description} onChange={(e) => setDescription(e.target.value)} className="border-2 border-gray-100 p-5 rounded-3xl outline-none" placeholder="상세 설명"></textarea>
         
-        <button type="submit" disabled={loading} className="font-black text-2xl p-6 rounded-[2rem] text-white bg-blue-600 hover:bg-blue-700 shadow-2xl transition active:scale-95">
-          {loading ? "보물 검수 중..." : "경매 시작하기 🚀"}
-        </button>
-      </form>
-    </div>
-  );
-}
+//         <button type="submit" disabled={loading} className="font-black text-2xl p-6 rounded-[2rem] text-white bg-blue-600 hover:bg-blue-700 shadow-2xl transition active:scale-95">
+//           {loading ? "보물 검수 중..." : "경매 시작하기 🚀"}
+//         </button>
+//       </form>
+//     </div>
+//   );
+// }
