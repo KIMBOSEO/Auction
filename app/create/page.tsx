@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 export default function CreateItem() {
   const [title, setTitle] = useState('');
   const [price, setPrice] = useState('');
+  const [instantlyBuyPrice, setInstantlyBuyPrice] = useState('');  // 즉시 구매가 (선택)
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('기타');
   const [duration, setDuration] = useState('24');
@@ -92,9 +93,16 @@ export default function CreateItem() {
 
     const { data: { user } } = await supabase.auth.getUser();
     
+    // 즉시 구매가 유효성 검사
+    if (instantlyBuyPrice && Number(instantlyBuyPrice) <= Number(price)) {
+      setLoading(false);
+      return alert('즉시 구매가는 시작가보다 높아야 합니다.');
+    }
+
     const { error } = await supabase.from('items').insert([{ 
       title, 
       price: Number(price), 
+      instantly_buy_price: instantlyBuyPrice ? Number(instantlyBuyPrice) : null,
       description, 
       category,
       image_url: imageUrls[0], // 대표 이미지 (첫 번째)
@@ -219,6 +227,25 @@ export default function CreateItem() {
               className="w-full border-2 border-gray-100 dark:border-gray-700 p-4 pl-12 rounded-2xl bg-white dark:bg-gray-800 dark:text-white outline-none font-black text-2xl focus:border-blue-500"
             />
           </div>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <label className="font-black text-gray-700 dark:text-gray-300 ml-1">
+            즉시 구매가 <span className="text-xs font-normal text-gray-400">(선택 — 미설정 시 자동 비활성화)</span>
+          </label>
+          <div className="relative">
+            <span className="absolute left-5 top-1/2 -translate-y-1/2 font-black text-gray-400">₩</span>
+            <input
+              type="number"
+              value={instantlyBuyPrice}
+              onChange={(e) => setInstantlyBuyPrice(e.target.value)}
+              placeholder="시작가보다 높은 금액"
+              className="w-full border-2 border-gray-100 dark:border-gray-700 p-4 pl-12 rounded-2xl bg-white dark:bg-gray-800 dark:text-white outline-none font-black text-2xl focus:border-green-500"
+            />
+          </div>
+          {instantlyBuyPrice && Number(instantlyBuyPrice) > 0 && Number(instantlyBuyPrice) <= Number(price) && (
+            <p className="text-xs text-red-500 pl-1">⚠️ 즉시 구매가는 시작가보다 높아야 합니다.</p>
+          )}
         </div>
 
         <div className="flex flex-col gap-3">

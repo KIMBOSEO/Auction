@@ -21,8 +21,8 @@ export default function SortSelect({ currentSort }: { currentSort: string }) {
       <span className="text-xs font-black text-gray-400 uppercase">정렬 기준:</span>
       <select 
         name="sort" 
-        defaultValue={currentSort} 
-        onChange={handleSortChange} // 🌟 이벤트 핸들러를 클라이언트 컴포넌트 안으로 안전하게 이동!
+        value={currentSort}
+        onChange={handleSortChange} // 🌟 defaultValue → value: URL 변경 시 select 값이 올바르게 반영됨
         className="bg-white border-2 border-gray-100 font-bold text-gray-700 py-2 px-4 rounded-xl outline-none cursor-pointer hover:border-blue-500 transition-colors"
       >
         <option value="newest">최신 등록순 ✨</option>

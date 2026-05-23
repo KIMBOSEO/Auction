@@ -5,15 +5,16 @@ import SortSelect from "../components/SortSelect"; // 🌟 새로 만든 컴포�
 export const revalidate = 0; // 실시간 데이터 유지
 
 interface Props {
-  searchParams: { query?: string; category?: string; sort?: string };
+  // Next.js 15+: searchParams는 반드시 await 해야 하는 Promise
+  searchParams: Promise<{ query?: string; category?: string; sort?: string }>;
 }
 
 export default async function Home(props: Props) {
-  // Next.js 버전에 상관없이 안전하게 searchParams 추적
-  const searchParams = props.searchParams || {};
-  const query = searchParams.query || "";
-  const category = searchParams.category || "전체";
-  const sort = searchParams.sort || "newest";
+  // 🌟 BUG FIX: Next.js 15+에서 searchParams는 Promise이므로 await 필요
+  const searchParams = await props.searchParams;
+  const query = searchParams?.query || "";
+  const category = searchParams?.category || "전체";
+  const sort = searchParams?.sort || "newest";
 
   const now = new Date().toISOString();
 

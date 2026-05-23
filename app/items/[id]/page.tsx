@@ -132,6 +132,14 @@ export default function ItemDetail() {
                 <span className="text-sm font-bold text-blue-600">원</span>
               </div>
             </div>
+
+            {/* 즉시 구매가 (판매자가 설정한 경우만 표시) */}
+            {item.instantly_buy_price && (
+              <div className="mb-6 p-3 bg-green-50 dark:bg-green-900/30 rounded-xl border border-green-200 dark:border-green-800">
+                <p className="text-xs font-black text-green-600 dark:text-green-400">⚡ 즉시 구매가</p>
+                <p className="text-xl font-black text-green-600 dark:text-green-400">₩{item.instantly_buy_price.toLocaleString()}</p>
+              </div>
+            )}
             
             {isOwner ? (
               <div className="space-y-3">
@@ -140,7 +148,7 @@ export default function ItemDetail() {
                 <button className="w-full p-4 bg-gray-100 text-gray-400 rounded-2xl font-black text-base cursor-not-allowed">기간 연장 (유료 상품)</button>
               </div>
             ) : !isEnded ? (
-              <BidForm itemId={item.id} currentPrice={item.price} />
+              <BidForm itemId={item.id} currentPrice={item.price} instantlyBuyPrice={item.instantly_buy_price} />
             ) : (
               <div className="bg-gray-100 p-4 rounded-xl text-center font-black text-gray-400">경매 종료되었습니다.</div>
             )}
