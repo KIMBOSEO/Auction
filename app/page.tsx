@@ -25,7 +25,8 @@ export default async function Home(props: Props) {
     supabaseQuery = supabaseQuery.eq("category", category);
   }
   if (query) {
-    supabaseQuery = supabaseQuery.ilike("title", `%${query}%`);
+    // 🌟 제목 또는 판매자 닉네임으로 검색 가능하도록 OR 조건 추가
+    supabaseQuery = supabaseQuery.or(`title.ilike.%${query}%,user_nickname.ilike.%${query}%`);
   }
 
   // 3. 정렬 조건 분기
@@ -56,8 +57,8 @@ export default async function Home(props: Props) {
     <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
       {/* 검색 및 카테고리 헤더 */}
       <div className="mb-12 space-y-6 text-center">
-        <h1 className="text-5xl font-black text-blue-600 mb-2 tracking-tighter">GA-MUL-CHI</h1>
-        <p className="text-gray-400 font-medium font-mono uppercase tracking-widest text-xs">Real-time Auction Platform</p>
+        <h1 className="text-5xl font-black text-blue-600 dark:text-blue-400 mb-2 tracking-tighter">GA-MUL-CHI</h1>
+        <p className="text-gray-400 dark:text-gray-500 font-medium font-mono uppercase tracking-widest text-xs">Real-time Auction Platform</p>
         
         <form action="/" method="get" className="relative max-w-2xl mx-auto mt-8">
           <input type="hidden" name="category" value={category} />
@@ -67,7 +68,7 @@ export default async function Home(props: Props) {
             name="query"
             defaultValue={query}
             placeholder="어떤 보물을 낚으러 오셨나요?"
-            className="w-full p-6 pl-14 rounded-[2rem] border-2 border-gray-100 shadow-xl outline-none focus:border-blue-500 transition-all text-lg bg-gray-50 focus:bg-white"
+            className="w-full p-6 pl-14 rounded-[2rem] border-2 border-gray-100 dark:border-gray-700 shadow-xl outline-none focus:border-blue-500 transition-all text-lg bg-gray-50 dark:bg-gray-900 focus:bg-white dark:focus:bg-gray-800 dark:text-white"
           />
           <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl">🔍</span>
           <button type="submit" className="absolute right-4 top-1/2 -translate-y-1/2 bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 shadow-md transition-all">
@@ -82,8 +83,8 @@ export default async function Home(props: Props) {
               href={`/?category=${cat}${query ? `&query=${query}` : ""}&sort=${sort}`}
               className={`px-8 py-3 rounded-full font-black transition-all ${
                 category === cat
-                  ? "bg-gray-800 text-white shadow-lg scale-105"
-                  : "bg-white text-gray-400 border border-gray-100 hover:bg-gray-50"
+                  ? "bg-gray-800 dark:bg-gray-100 text-white dark:text-gray-900 shadow-lg scale-105"
+                  : "bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
               }`}
             >
               {cat}
@@ -93,9 +94,9 @@ export default async function Home(props: Props) {
       </div>
 
       {/* 정렬 바 영역 */}
-      <div className="flex justify-between items-center mb-8 border-b-2 border-gray-100 pb-4">
-        <h2 className="text-2xl font-black text-gray-800">
-          실시간 경매장 <span className="text-blue-600 ml-2">{items?.length || 0}</span>
+      <div className="flex justify-between items-center mb-8 border-b-2 border-gray-100 dark:border-gray-800 pb-4">
+        <h2 className="text-2xl font-black text-gray-800 dark:text-white">
+          실시간 경매장 <span className="text-blue-600 dark:text-blue-400 ml-2">{items?.length || 0}</span>
         </h2>
         
         {/* 🌟 에러 메이커였던 form 대신 깔끔하게 분리된 클라이언트 컴포넌트 배치 */}
@@ -104,10 +105,10 @@ export default async function Home(props: Props) {
 
       {/* 아이템 리스트 */}
       {!items || items.length === 0 ? (
-        <div className="text-center py-32 bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-200">
+        <div className="text-center py-32 bg-gray-50 dark:bg-gray-900 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-gray-800">
           <span className="text-6xl mb-4 block">🎣</span>
-          <p className="text-xl font-bold text-gray-400">조건에 맞는 가물치가 없습니다.</p>
-          <a href="/" className="text-blue-600 underline mt-4 inline-block font-bold">초기화하기</a>
+          <p className="text-xl font-bold text-gray-400 dark:text-gray-500">조건에 맞는 가물치가 없습니다.</p>
+          <a href="/" className="text-blue-600 dark:text-blue-400 underline mt-4 inline-block font-bold">초기화하기</a>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">

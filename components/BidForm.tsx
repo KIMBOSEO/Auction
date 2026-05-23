@@ -47,9 +47,15 @@ export default function BidForm({ itemId, currentPrice }: { itemId: string, curr
       return;
     }
 
+    // 🌟 BUG FIX: 입찰 횟수 자동 카운트
+    const { count } = await supabase
+      .from('bids')
+      .select('*', { count: 'exact', head: true })
+      .eq('item_id', itemId);
+
     const { error: itemError } = await supabase
       .from('items')
-      .update({ price: bidAmount })
+      .update({ price: bidAmount, bids: count || 0 })
       .eq('id', itemId);
 
     if (itemError) {
