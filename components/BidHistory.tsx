@@ -7,7 +7,9 @@ export default function BidHistory({ itemId }: { itemId: string }) {
   const [bids, setBids] = useState<any[]>([]);
 
   useEffect(() => {
-    // 1. 기존 입찰 기록 가져오기
+    if (!itemId) return;
+
+    // 1. 초기 입찰 데이터 불러오기
     const fetchBids = async () => {
       const { data } = await supabase
         .from('bids')
@@ -18,13 +20,13 @@ export default function BidHistory({ itemId }: { itemId: string }) {
     };
     fetchBids();
 
-    // 2. 실시간 새 입찰 감시
+    // 2. 실시간 새로운 입찰 구독
     const channel = supabase
-      .channel(`bids-${itemId}`)
+      .channel(`bids-pool-${itemId}`)
       .on('postgres_changes', 
         { event: 'INSERT', schema: 'public', table: 'bids', filter: `item_id=eq.${itemId}` }, 
         (payload) => {
-          setBids((prev) => [payload.new, ...prev]);
+          setBids((prev) => [payload.new, ...prev].sort((a, b) => b.amount - a.amount));
         }
       )
       .subscribe();
@@ -33,37 +35,32 @@ export default function BidHistory({ itemId }: { itemId: string }) {
   }, [itemId]);
 
   return (
-    <div className="bg-white border rounded-3xl overflow-hidden shadow-sm">
-      <div className="bg-gray-50 px-6 py-4 border-b flex justify-between items-center">
-        <h4 className="font-bold text-gray-700">입찰 히스토리 📈</h4>
-        <span className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-1 rounded-lg">실시간</span>
-      </div>
-      <div className="max-h-[300px] overflow-y-auto">
-        {bids.length === 0 ? (
-          <p className="p-10 text-center text-gray-400 text-sm">아직 입찰 기록이 없습니다.</p>
-        ) : (
-          <ul className="divide-y">
-            {bids.map((bid, idx) => (
-              <li key={idx} className={`p-4 flex justify-between items-center ${idx === 0 ? 'bg-blue-50/50' : ''}`}>
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-gray-700">
-                    {bid.user_email.split('@')[0]}***
-                  </span>
-                  <span className="text-[10px] text-gray-400">
-                    {new Date(bid.created_at).toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex flex-col items-end">
-                  <span className={`font-black ${idx === 0 ? 'text-blue-600 text-lg' : 'text-gray-600'}`}>
-                    {bid.amount.toLocaleString()}원
-                  </span>
-                  {idx === 0 && <span className="text-[10px] font-bold text-blue-500">현재 최고가</span>}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+    <div className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm max-h-[300px] overflow-y-auto">
+      <h3 className="text-sm font-black text-gray-400 uppercase tracking-wider mb-4">입찰 히스토리 🔨</h3>
+      
+      {bids.length === 0 ? (
+        <p className="text-center text-sm font-bold text-gray-300 py-10">첫 입찰의 주인공이 되어보세요!</p>
+      ) : (
+        <div className="space-y-3">
+          {bids.map((bid, index) => (
+            <div 
+              key={bid.id} 
+              className={`flex justify-between items-center p-3 rounded-xl text-sm transition-all ${
+                index === 0 ? 'bg-blue-50/50 font-black text-blue-600 border border-blue-100' : 'text-gray-600 font-bold'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-xs">{index === 0 ? '👑' : '•'}</span>
+                {/* 🌟 개인정보 수호: 닉네임이 있으면 닉네임 표기, 없으면 이메일 앞부분 마스킹 */}
+                <span>
+                  {bid.user_nickname || (bid.user_email ? `${bid.user_email.split('@')[0].slice(0, 3)}***` : '익명의 가물치')}
+                </span>
+              </div>
+              <span>₩{bid.amount.toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

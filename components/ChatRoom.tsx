@@ -3,13 +3,35 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
-export default function ChatRoom({ itemId, userEmail }: { itemId: string; userEmail: string | undefined }) {
-  const [messages, setMessages] = useState<any[]>([]);
-  const [newMessage, setNewMessage] = useState('');
-  const scrollRef = useRef<HTMLDivElement>(null);
+interface Message {
+  id: string;
+  user_email?: string;
+  user_nickname?: string;
+  message: string;
+  created_at: string;
+  is_system?: boolean; // 시스템 메시지 구분을 위한 속성
+}
 
-  // 1. 기존 메시지 불러오기 및 실시간 구독
+export default function ChatRoom({ itemId, userEmail }: { itemId: string; userEmail?: string }) {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [myNickname, setMyNickname] = useState('');
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
+    if (!itemId) return;
+
+    // 1. 내 닉네임 정보 미리 긁어오기
+    const getMyNickname = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase.from('profiles').select('nickname').eq('id', user.id).single();
+        if (data?.nickname) setMyNickname(data.nickname);
+      }
+    };
+    getMyNickname();
+
+    // 2. 기존 채팅 데이터 로드
     const fetchMessages = async () => {
       const { data } = await supabase
         .from('messages')
@@ -18,16 +40,30 @@ export default function ChatRoom({ itemId, userEmail }: { itemId: string; userEm
         .order('created_at', { ascending: true });
       setMessages(data || []);
     };
-
     fetchMessages();
 
-    // 실시간 메시지 감시 시작!
+    // 3. 🌟 실시간 채널 통합 관리 (유저 채팅 + 입찰 시스템 중계)
     const channel = supabase
-      .channel(`chat-${itemId}`)
+      .channel(`room-${itemId}`)
+      // (A) 유저가 보내는 실시간 일반 메시지 구독
       .on('postgres_changes', 
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `item_id=eq.${itemId}` }, 
         (payload) => {
-          setMessages((prev) => [...prev, payload.new]);
+          setMessages((prev) => [...prev, payload.new as Message]);
+        }
+      )
+      // (B) 🌟 실시간 입찰(bids) 발생 시 채팅창에 즉시 공지 메시지 인젝션!
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'bids', filter: `item_id=eq.${itemId}` },
+        (payload) => {
+          const newBid = payload.new;
+          const systemMsg: Message = {
+            id: `system-${newBid.id}`,
+            message: `📢 [입찰 공지] ${newBid.user_nickname || '누군가'}님이 ₩${newBid.amount.toLocaleString()}원에 입찰하셨습니다! 🔥`,
+            created_at: newBid.created_at,
+            is_system: true
+          };
+          setMessages((prev) => [...prev, systemMsg]);
         }
       )
       .subscribe();
@@ -35,60 +71,80 @@ export default function ChatRoom({ itemId, userEmail }: { itemId: string; userEm
     return () => { supabase.removeChannel(channel); };
   }, [itemId]);
 
-  // 2. 새 메시지가 올 때마다 스크롤 아래로!
+  // 스크롤 항상 하단 유지
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // 3. 메시지 전송
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !userEmail) return;
+    if (!input.trim() || !userEmail) return;
 
-    const { error } = await supabase.from('messages').insert([
-      { text: newMessage, user_email: userEmail, item_id: itemId }
-    ]);
+    const { error } = await supabase.from('messages').insert([{
+      item_id: itemId,
+      user_email: userEmail,
+      user_nickname: myNickname || userEmail.split('@')[0], // 닉네임 우선 적용
+      message: input.trim()
+    }]);
 
-    if (error) alert("메시지 전송 실패!");
-    setNewMessage('');
+    if (!error) setInput('');
   };
 
   return (
-    <div className="bg-white border rounded-2xl shadow-sm overflow-hidden flex flex-col h-[400px]">
-      <div className="bg-gray-50 px-4 py-3 border-b">
-        <h4 className="font-bold text-gray-700">실시간 입찰 중계 💬</h4>
-      </div>
+    <div className="bg-gray-50 border border-gray-100 rounded-[2.5rem] p-6 shadow-sm flex flex-col h-[450px]">
+      <h3 className="text-sm font-black text-gray-400 uppercase tracking-wider mb-4">실시간 경매 중계방 💬</h3>
+      
+      {/* 메시지 출력창 */}
+      <div className="flex-1 overflow-y-auto space-y-3 pr-2 mb-4">
+        {messages.map((msg) => {
+          if (msg.is_system) {
+            // 📢 시스템 중계 메시지 UI 디자인
+            return (
+              <div key={msg.id} className="text-center my-3 animate-bounce">
+                <span className="bg-blue-600 text-white text-xs font-black px-4 py-2 rounded-full shadow-md inline-block">
+                  {msg.message}
+                </span>
+              </div>
+            );
+          }
 
-      {/* 메시지 리스트 영역 */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((msg, idx) => (
-          <div key={idx} className={`flex flex-col ${msg.user_email === userEmail ? 'items-end' : 'items-start'}`}>
-            <span className="text-[10px] text-gray-400 mb-1">{msg.user_email.split('@')[0]}</span>
-            <div className={`px-3 py-2 rounded-2xl text-sm max-w-[80%] ${
-              msg.user_email === userEmail ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-gray-100 text-gray-800 rounded-tl-none'
-            }`}>
-              {msg.text}
+          // 일반 유저 채팅 UI 디자인
+          const isMe = msg.user_email === userEmail;
+          return (
+            <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+              <span className="text-[10px] text-gray-400 font-bold mb-1 px-1">
+                {msg.user_nickname || msg.user_email?.split('@')[0]}
+              </span>
+              <div className={`p-4 rounded-[1.5rem] max-w-[80%] text-sm font-medium shadow-sm ${
+                isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none border border-gray-100'
+              }`}>
+                {msg.message}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
+        <div ref={chatEndRef} />
       </div>
 
-      {/* 입력 영역 */}
-      <form onSubmit={sendMessage} className="p-3 border-t flex gap-2">
-        <input
-          type="text"
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          placeholder={userEmail ? "메시지를 입력하세요..." : "로그인 후 채팅 가능"}
-          disabled={!userEmail}
-          className="flex-1 border rounded-full px-4 py-2 text-sm outline-none focus:border-blue-500"
-        />
-        <button disabled={!userEmail} className="bg-blue-600 text-white px-4 py-2 rounded-full text-sm font-bold hover:bg-blue-700 disabled:bg-gray-300">
-          전송
-        </button>
-      </form>
+      {/* 입력창 (로그인 한 사람만 활성화) */}
+      {userEmail ? (
+        <form onSubmit={sendMessage} className="flex gap-2 bg-white p-2 rounded-2xl border-2 border-gray-100 focus-within:border-blue-500 transition-all">
+          <input 
+            type="text" 
+            value={input} 
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="경매장 사람들과 대화해보세요!"
+            className="flex-1 px-3 py-2 outline-none text-sm font-bold text-gray-700 bg-transparent"
+          />
+          <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-xs font-black transition-all">
+            전송
+          </button>
+        </form>
+      ) : (
+        <div className="text-center text-xs font-bold text-gray-400 bg-gray-100 p-4 rounded-xl">
+          로그인 후 실시간 채팅에 참여할 수 있습니다. 🔒
+        </div>
+      )}
     </div>
   );
 }
