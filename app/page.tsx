@@ -49,7 +49,8 @@ export default async function Home(props: Props) {
   }
 
   const { data: items } = await supabaseQuery;
-  const categories = ["전체", "전자기기", "스포츠/레저", "패션/잡화", "취미", "희귀카드", "기타"];
+  //const categories = ["전체", "전자기기", "스포츠/레저", "패션/잡화", "취미", "희귀카드", "기타"];
+  const categories = ["희귀카드"];
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
