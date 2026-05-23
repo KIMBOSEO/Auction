@@ -1,170 +1,109 @@
-// 🌟 알림 센터 유틸리티
+import { supabase } from './supabase';
 
-export type NotificationType = 
-  | 'outbid' // 상위 입찰자 등장
-  | 'liked_ending' // 관심 상품 마감 임박
-  | 'keyword_match' // 키워드 매칭
-  | 'follow_new_item'; // 팔로우한 판매자 신규 상품
-
-export interface Notification {
-  id: string;
-  user_id: string;
-  type: NotificationType;
+// 🌟 알림 전송을 위한 인터페이스 구조 정의
+interface CreateNotificationParams {
+  userId: string;
+  type: 'outbid' | 'liked_ending' | 'keyword_match' | 'follow_new_item';
   title: string;
   message: string;
-  related_item_id?: string;
-  related_user_id?: string;
-  is_read: boolean;
-  created_at: string;
+  relatedItemId?: string;
+  relatedUserId?: string;
 }
 
 /**
- * 상위 입찰자 등장 알림 생성
+ * 1. 단일 알림 생성 유틸리티 함수
  */
-export async function createOutbidNotification(
-  supabase: any,
-  itemId: string,
-  previousBidderId: string,
-  newHighestAmount: number,
-  itemTitle: string
-) {
-  return await supabase.from('notifications').insert([{
-    user_id: previousBidderId,
-    type: 'outbid',
-    title: '더 높은 입찰가 등장!',
-    message: `"${itemTitle}"에서 더 높은 가격(₩${newHighestAmount.toLocaleString()})으로 입찰되었습니다.`,
-    related_item_id: itemId,
-    is_read: false
-  }]);
-}
+export async function createNotification({
+  userId,
+  type,
+  title,
+  message,
+  relatedItemId,
+  relatedUserId,
+}: CreateNotificationParams) {
+  const { error } = await supabase.from('notifications').insert([
+    {
+      user_id: userId,
+      type,
+      title,
+      message,
+      related_item_id: relatedItemId,
+      related_user_id: relatedUserId,
+      is_read: false,
+    },
+  ]);
 
-/**
- * 관심 상품 마감 임박 알림 (마감 1시간 전)
- */
-export async function checkAndNotifyLikedItemsEnding(
-  supabase: any,
-  userId: string
-) {
-  const oneHourLater = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-  const twoHoursBefore = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
-
-  // 마감 시간이 1~2시간 사이인 찜한 상품 가져오기
-  const { data: likedItems } = await supabase
-    .from('likes')
-    .select('item_id, items(id, title, end_at)')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
-
-  if (!likedItems) return;
-
-  for (const { items: item } of likedItems) {
-    if (!item) continue;
-
-    const endTime = new Date(item.end_at).getTime();
-    const now = new Date().getTime();
-    const timeLeft = endTime - now;
-
-    // 마감 1시간 전이고, 아직 알림을 보내지 않은 경우
-    if (timeLeft > 0 && timeLeft < 60 * 60 * 1000) {
-      const { data: existingNotification } = await supabase
-        .from('notifications')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('related_item_id', item.id)
-        .eq('type', 'liked_ending')
-        .single();
-
-      if (!existingNotification) {
-        await supabase.from('notifications').insert([{
-          user_id: userId,
-          type: 'liked_ending',
-          title: '관심 상품 마감 임박!',
-          message: `"${item.title}"의 경매가 곧 종료됩니다.`,
-          related_item_id: item.id,
-          is_read: false
-        }]);
-      }
-    }
+  if (error) {
+    console.error('알림 생성 실패:', error.message);
   }
+  return { success: !error, error };
 }
 
 /**
- * 키워드 알림 생성
+ * 2. 상위 입찰자 등장 시 기존 최고 입찰자에게 알림 발송
  */
-export async function createKeywordMatchNotification(
-  supabase: any,
-  userId: string,
-  keyword: string,
-  itemId: string,
-  itemTitle: string
-) {
-  return await supabase.from('notifications').insert([{
-    user_id: userId,
-    type: 'keyword_match',
-    title: `'${keyword}' 상품 등록!`,
-    message: `검색 키워드 "${keyword}"와 일치하는 상품 "${itemTitle}"이 등록되었습니다.`,
-    related_item_id: itemId,
-    is_read: false
-  }]);
+export async function notifyOutbid(itemId: string, itemTitle: string, previousBidderId: string, newAmount: number) {
+  if (!previousBidderId) return;
+
+  return createNotification({
+    userId: previousBidderId,
+    type: 'outbid',
+    title: '👑 상위 입찰자 등장!',
+    message: `[${itemTitle}] 상품에 더 높은 입찰가(₩${newAmount.toLocaleString()})가 등장했습니다. 🔨`,
+    relatedItemId: itemId,
+  });
 }
 
 /**
- * 팔로우한 판매자 신규 상품 알림
+ * 3. 찜한 상품의 마감 임박 알림 (서버 및 클라이언트 배치용)
  */
-export async function notifyFollowedSellerNewItem(
-  supabase: any,
-  sellerId: string,
-  sellerNickname: string,
-  itemId: string,
-  itemTitle: string
-) {
-  // 이 판매자를 팔로우한 모든 사용자 찾기
-  const { data: followers } = await supabase
+export async function notifyLikedItemEnding(itemId: string, itemTitle: string, userId: string) {
+  return createNotification({
+    userId,
+    type: 'liked_ending',
+    title: '⏳ 관심 상품 마감 임박!',
+    message: `찜해두신 보물 [${itemTitle}]의 경매 마감 시간이 얼마 남지 않았습니다! 🎣`,
+    relatedItemId: itemId,
+  });
+}
+
+/**
+ * 4. 🌟 판매자가 신규 상품을 올렸을 때 팔로워들에게 단체 알림 발송 (에러 해결 구역)
+ */
+export async function notifyFollowersNewItem(sellerId: string, sellerNickname: string, itemId: string, itemTitle: string) {
+  // 나를 팔로우하는 사람들의 리스트 확보
+  const { data: followersData, error: fetchError } = await supabase
     .from('follows')
     .select('follower_id')
     .eq('following_id', sellerId);
 
-  if (!followers || followers.length === 0) return;
+  if (fetchError || !followersData) {
+    console.error('팔로워 조회 실패:', fetchError?.message);
+    return;
+  }
 
-  // 각 팔로워에게 알림 생성
-  const notifications = followers.map(({ follower_id }) => ({
+  // 🌟 [해결의 열쇠] 구조 분해 할당을 위해 데이터 타입을 명확히 타이핑해 줍니다.
+  const followers = followersData as { follower_id: string }[];
+
+  if (followers.length === 0) return;
+
+  // 각 팔로워에게 보낼 알림 객체 배열 생성 (타입 안정성 확보! 🎯)
+  const notificationRows = followers.map(({ follower_id }) => ({
     user_id: follower_id,
     type: 'follow_new_item',
-    title: `${sellerNickname}님의 신규 상품!`,
-    message: `팔로우한 판매자 "${sellerNickname}"님이 새로운 상품 "${itemTitle}"을 등록했습니다.`,
+    title: `🔔 ${sellerNickname}님의 신규 보물!`,
+    message: `팔로우하신 ${sellerNickname}님이 새 경매 물품 [${itemTitle}]을 등록하셨습니다. 🚀`,
     related_item_id: itemId,
     related_user_id: sellerId,
-    is_read: false
+    is_read: false,
   }));
 
-  return await supabase.from('notifications').insert(notifications);
-}
-
-/**
- * 알림 읽음 처리
- */
-export async function markNotificationAsRead(
-  supabase: any,
-  notificationId: string
-) {
-  return await supabase
+  // 대량 벌크 인서트(Bulk Insert)로 한 번에 알림 발송
+  const { error: insertError } = await supabase
     .from('notifications')
-    .update({ is_read: true })
-    .eq('id', notificationId);
-}
+    .insert(notificationRows);
 
-/**
- * 읽지 않은 알림 개수 조회
- */
-export async function getUnreadNotificationCount(
-  supabase: any,
-  userId: string
-) {
-  const { count } = await supabase
-    .from('notifications')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .eq('is_read', false);
-
-  return count || 0;
+  if (insertError) {
+    console.error('팔로워 단체 알림 발송 실패:', insertError.message);
+  }
 }
