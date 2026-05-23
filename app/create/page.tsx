@@ -111,7 +111,7 @@ export default function CreateItem() {
           <div className="flex flex-col gap-3">
             <label className="font-black text-gray-700 ml-1">경매 기간</label>
             <select value={duration} onChange={(e) => setDuration(e.target.value)} className="border-2 border-gray-100 p-4 rounded-2xl bg-white font-bold">
-              <option value="1">1시간</option><option value="24">24시간</option><option value="168">7일</option><option value="0.004167">15초</option><option value="0.05">Test</option>
+              <option value="1">1시간</option><option value="24">24시간</option><option value="168">7일</option><option value="0.05">3분</option>
             </select>
           </div>
         </div>
