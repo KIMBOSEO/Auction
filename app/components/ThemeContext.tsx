@@ -48,8 +48,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isDark, mounted]);
 
-  if (!mounted) return <>{children}</>;
-
+  // 🌟 항상 Provider로 감싸서 SSR/프리렌더링 중에도 컨텍스트가 유지되도록 함
   return (
     <ThemeContext.Provider value={{ isDark, toggleTheme }}>
       {children}
@@ -59,8 +58,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
 export function useTheme() {
   const context = useContext(ThemeContext);
+  // 🌟 Provider 외부에서 사용 시 에러 대신 안전한 기본값 반환 (빌드 안정성)
   if (!context) {
-    throw new Error('useTheme must be used within ThemeProvider');
+    return { isDark: false, toggleTheme: () => {} };
   }
   return context;
 }
