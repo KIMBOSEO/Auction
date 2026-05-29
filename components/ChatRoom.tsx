@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 
 interface Message {
   id: string;
-  user_id: string; // 🌟 ID 비교를 위해 반드시 필요한 사양
+  user_id: string; 
   user_email?: string;
   user_nickname?: string;
   message: string;
@@ -19,13 +19,16 @@ export default function ChatRoom({ itemId, userEmail, item }: { itemId: string; 
   const [myNickname, setMyNickname] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // 판매자의 고유 식별 이메일 확보
+  const sellerEmail = item?.user_email || item?.email;
+
   useEffect(() => {
     if (!itemId) return;
 
     const getMyProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        setMyId(user.id); // 🌟 내 고유 식별 ID 임베딩
+        setMyId(user.id); 
         const { data } = await supabase.from('profiles').select('nickname').eq('id', user.id).single();
         if (data?.nickname) setMyNickname(data.nickname);
       }
@@ -42,7 +45,6 @@ export default function ChatRoom({ itemId, userEmail, item }: { itemId: string; 
     };
     fetchMessages();
 
-    // 실시간 채팅 채널 리스너
     const channel = supabase
       .channel(`room-messages-${itemId}`)
       .on('postgres_changes', 
@@ -69,7 +71,7 @@ export default function ChatRoom({ itemId, userEmail, item }: { itemId: string; 
 
     const { error } = await supabase.from('messages').insert([{
       item_id: itemId,
-      user_id: myId, // 🌟 인서트 시 내 고유 식별 ID 투척!
+      user_id: myId, 
       user_email: userEmail,
       user_nickname: myNickname || userEmail.split('@')[0],
       message: input.trim()
@@ -84,7 +86,7 @@ export default function ChatRoom({ itemId, userEmail, item }: { itemId: string; 
       
       <div className="flex-1 overflow-y-auto space-y-3 pr-1 mb-3 scrollbar-none">
         {messages.map((msg) => {
-          -- 🌟 [4번 제안 완벽 구현] 메세지 작성자 ID와 상품 등록자 ID가 같으면 무조건 "판매자(왼쪽)"
+          // 🌟 [교정 완료] return 문 진입 '직전'에 안전하게 조건식을 연산하도록 이동했습니다.
           const isSeller = msg.user_id === item?.user_id;
           
           return (
