@@ -4,6 +4,23 @@ import SortSelect from "../components/SortSelect";
 
 export const revalidate = 0; // 실시간 데이터 유지
 
+// 🌟 [해결의 열쇠 1] 가물치 경매장에 들어올 상품(Item)의 명확한 타입 규격 정의
+interface AuctionItem {
+  id: string;
+  title: string;
+  price: number;
+  description: string;
+  category: string;
+  image_url: string;
+  image_urls: string[];
+  end_at: string;
+  user_id: string;
+  user_nickname: string;
+  bids: number;
+  created_at: string;
+  instantly_buy_price?: number;
+}
+
 interface Props {
   searchParams: Promise<{ query?: string; category?: string; sort?: string; status?: string }>;
 }
@@ -53,7 +70,10 @@ export default async function Home(props: Props) {
       break;
   }
 
-  const { data: items } = await supabaseQuery;
+  const { data } = await supabaseQuery;
+  // 🌟 [해결의 열쇠 2] 받아온 데이터를 위에서 정의한 AuctionItem 배열 타입으로 강제 변환
+  const items = (data || []) as AuctionItem[];
+
   const categories = ["전체", "희귀카드", "전자기기", "스포츠/레저", "패션/잡화", "취미", "기타"];
 
   return (
@@ -68,7 +88,7 @@ export default async function Home(props: Props) {
         <form action="/" method="get" className="relative max-w-2xl mx-auto mt-8">
           <input type="hidden" name="category" value={category} />
           <input type="hidden" name="sort" value={sort} />
-          <input type="hidden" name="status" value={status} /> {/* 🌟 검색 시에도 탭 상태 고정 */}
+          <input type="hidden" name="status" value={status} />
           <input
             type="text"
             name="query"
@@ -82,7 +102,7 @@ export default async function Home(props: Props) {
           </button>
         </form>
 
-        {/* 🌟 [1번 요구사항] 경매 진행 중 / 완료 상태 탭 디자인 (절대 안 깨지게 배치) */}
+        {/* 경매 진행 중 / 완료 상태 탭 디자인 */}
         <div className="flex justify-center mt-6">
           <div className="inline-flex rounded-2xl bg-gray-100 dark:bg-gray-900 p-1.5 shadow-inner border dark:border-gray-800">
             <a 
@@ -105,7 +125,6 @@ export default async function Home(props: Props) {
           {categories.map((cat) => (
             <a
               key={cat}
-              /* 🌟 주소창에 status 유실을 방지하도록 싹 다 연결 */
               href={`/?status=${status}&category=${cat}${query ? `&query=${query}` : ""}&sort=${sort}`}
               className={`px-5 py-2.5 rounded-full text-xs font-black transition-all border ${
                 category === cat
@@ -123,14 +142,14 @@ export default async function Home(props: Props) {
       <div className="flex justify-between items-center mb-8 border-b-2 border-gray-100 dark:border-gray-800 pb-4 flex-wrap gap-4">
         <h2 className="text-xl md:text-2xl font-black text-gray-800 dark:text-white">
           {status === 'ongoing' ? '실시간 경매장' : '과거 낙찰 기록실'} 
-          <span className="text-blue-600 dark:text-blue-400 ml-2">{items?.length || 0}</span>
+          <span className="text-blue-600 dark:text-blue-400 ml-2">{items.length}</span>
         </h2>
         
         <SortSelect currentSort={sort} />
       </div>
 
       {/* 아이템 리스트 출력 */}
-      {!items || items.length === 0 ? (
+      {items.length === 0 ? (
         <div className="text-center py-32 bg-gray-50 dark:bg-gray-900 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-gray-800">
           <span className="text-6xl mb-4 block">🎣</span>
           <p className="text-xl font-bold text-gray-400 dark:text-gray-500">조건에 맞는 가물치가 없습니다.</p>
@@ -138,7 +157,8 @@ export default async function Home(props: Props) {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-          {items.map((item) => (
+          {/* 🌟 [해결 완료] 이제 item의 타입을 완벽히 인지하여 ts(7006) 에러가 사라집니다. */}
+          {items.map((item: AuctionItem) => (
             <ItemCard key={item.id} item={item} />
           ))}
         </div>
