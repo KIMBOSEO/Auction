@@ -3,118 +3,85 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
-// 🌟 알림 데이터의 규격(Type) 정의
-interface Notification {
+interface NotificationLog {
   id: string;
-  user_id: string;
-  type: 'outbid' | 'liked_ending' | 'keyword_match' | 'follow_new_item';
   title: string;
   message: string;
-  related_item_id?: string;
-  related_user_id?: string;
+  type: string;
   is_read: boolean;
   created_at: string;
 }
 
 export default function NotificationCenter() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [logs, setLogs] = useState<NotificationLog[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    let channel: any;
-
-    const setupNotifications = async () => {
+    const fetchNotificationLogs = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 1. 기존 알림 목록 불러오기
+      // 🌟 1번 요구사항: 내 계정 전용 누적 로그 리스트 쿼리
       const { data } = await supabase
         .from('notifications')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       
-      const loadedNotifications = (data || []) as Notification[];
-      setNotifications(loadedNotifications);
-      setUnreadCount(loadedNotifications.filter(n => !n.is_read).length);
-
-      // 2. 🌟 실시간 알림 채널 구독 및 타입 에러 완벽 방어
-      channel = supabase
-        .channel(`user-notifications-${user.id}`)
-        .on('postgres_changes', 
-          { 
-            event: 'INSERT', 
-            schema: 'public', 
-            table: 'notifications', 
-            filter: `user_id=eq.${user.id}` 
-          }, 
-          (payload) => {
-            // 🔥 [해결의 열쇠] payload.new 뒤에 'as Notification'을 붙여 타입을 명시해 줍니다!
-            const newNotification = payload.new as Notification;
-            
-            setNotifications(prev => [newNotification, ...prev]);
-            setUnreadCount(prev => prev + 1);
-          }
-        )
-        .subscribe();
+      setLogs(data || []);
     };
 
-    setupNotifications();
+    fetchNotificationLogs();
 
-    return () => {
-      if (channel) supabase.removeChannel(channel);
-    };
+    // 실시간 알림 로그 수신기 가동
+    const channel = supabase
+      .channel('realtime-notification-logs')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, 
+        (payload) => {
+          setLogs((prev) => [payload.new as NotificationLog, ...prev]);
+        }
+      ).subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // 알림 읽음 처리 기능
-  const handleRead = async (id: string) => {
-    const { error } = await supabase
-      .from('notifications')
-      .update({ is_read: true })
-      .eq('id', id);
+  const unreadCount = logs.filter(l => !l.is_read).length;
 
-    if (!error) {
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-      setUnreadCount(prev => Math.max(0, prev - 1));
-    }
+  const markAllAsRead = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id);
+    setLogs((prev) => prev.map(l => ({ ...l, is_read: true })));
   };
 
   return (
     <div className="relative">
-      {/* 종 모양 버튼 */}
-      <button 
-        onClick={() => setIsOpen(!isOpen)} 
-        className="relative p-2 rounded-xl transition-all active:scale-90 hover:bg-gray-100"
-      >
-        <span className="text-2xl">🔔</span>
+      <button onClick={() => { setIsOpen(!isOpen); markAllAsRead(); }} className="relative p-2 bg-gray-100 dark:bg-gray-800 rounded-full hover:scale-105 transition-all">
+        <span className="text-xl">🔔</span>
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center animate-pulse">
+          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center animate-bounce">
             {unreadCount}
           </span>
         )}
       </button>
 
-      {/* 알림 드롭다운 레이어 */}
       {isOpen && (
-        <div className="absolute right-0 mt-3 w-80 bg-white border border-gray-100 shadow-2xl rounded-[2rem] p-4 z-50 max-h-[400px] overflow-y-auto">
-          <h3 className="text-sm font-black text-gray-400 uppercase tracking-wider mb-3 px-2">실시간 알림 센터 📢</h3>
-          {notifications.length === 0 ? (
-            <p className="text-center text-xs font-bold text-gray-300 py-10">도착한 알림이 없습니다.</p>
+        <div className="absolute right-0 mt-3 w-80 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-3xl shadow-2xl p-4 z-50 max-h-[400px] overflow-y-auto">
+          <div className="flex justify-between items-center mb-3 border-b pb-2 border-gray-100 dark:border-gray-800">
+            <h4 className="text-xs font-black text-gray-800 dark:text-gray-200 uppercase tracking-widest">알림 기록 보관실 🗄️</h4>
+            <span className="text-[10px] font-bold text-gray-400">총 {logs.length}건</span>
+          </div>
+
+          {logs.length === 0 ? (
+            <p className="text-center text-xs font-bold text-gray-300 py-8">누적된 알림 기록이 없습니다.</p>
           ) : (
             <div className="space-y-2">
-              {notifications.map((notif) => (
-                <div 
-                  key={notif.id} 
-                  onClick={() => handleRead(notif.id)}
-                  className={`p-4 rounded-2xl text-left cursor-pointer transition-all border ${
-                    notif.is_read 
-                      ? 'bg-gray-50/50 border-transparent text-gray-400' 
-                      : 'bg-blue-50/50 border-blue-100 text-gray-800 font-bold hover:bg-blue-50'
-                  }`}
-                >
-                  <p className="text-xs font-black mb-1 text-blue-600">{notif.title}</p>
-                  <p className="text-xs leading-relaxed">{notif.message}</p>
+              {logs.map((log) => (
+                <div key={log.id} className={`p-3 rounded-2xl border text-left transition-all ${log.is_read ? 'bg-gray-50/50 border-gray-100 dark:bg-gray-800/30 dark:border-gray-800' : 'bg-blue-50/40 border-blue-100 dark:bg-blue-950/20 dark:border-blue-900'}`}>
+                  <p className="text-xs font-black text-gray-800 dark:text-gray-100 mb-1">{log.title}</p>
+                  <p className="text-[11px] font-medium text-gray-600 dark:text-gray-400 leading-relaxed">{log.message}</p>
+                  <span className="text-[9px] text-gray-400 block mt-1.5 font-bold">{new Date(log.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                 </div>
               ))}
             </div>
