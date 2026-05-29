@@ -1,164 +1,101 @@
-import { supabase } from "@/lib/supabase";
-import ItemCard from "../components/ItemCard";
-import SortSelect from "../components/SortSelect"; 
+'use client';
 
-export const revalidate = 0; // 실시간 데이터 유지
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import ItemCard from '@/components/ItemCard';
 
-// 🌟 [해결의 열쇠 1] 가물치 경매장에 들어올 상품(Item)의 명확한 타입 규격 정의
-interface AuctionItem {
-  id: string;
-  title: string;
-  price: number;
-  description: string;
-  category: string;
-  image_url: string;
-  image_urls: string[];
-  end_at: string;
-  user_id: string;
-  user_nickname: string;
-  bids: number;
-  created_at: string;
-  instantly_buy_price?: number;
-}
+export default function HomePage() {
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusTab, setStatusTab] = useState<'all' | 'bidding' | 'ended'>('bidding');
+  const [searchQuery, setSearchQuery] = useState('');
 
-interface Props {
-  searchParams: Promise<{ query?: string; category?: string; sort?: string; status?: string }>;
-}
+  useEffect(() => {
+    const fetchAllItems = async () => {
+      setLoading(true);
+      // 전체 아이템 리스트 최신순 쿼리
+      const { data, error } = await supabase
+        .from('items')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-export default async function Home(props: Props) {
-  const searchParams = await props.searchParams;
-  const query = searchParams?.query || "";
-  const category = searchParams?.category || "전체";
-  const sort = searchParams?.sort || "newest";
-  const status = searchParams?.status || 'ongoing'; // 'ongoing' | 'completed'
+      if (!error && data) {
+        setItems(data);
+      }
+      setLoading(false);
+    };
+    fetchAllItems();
+  }, []);
 
-  const now = new Date().toISOString();
+  // 🌟 [교정 완료] 불필요한 카테고리 필터링 조건을 완전히 도려내고 탭/검색만 남겼습니다.
+  const filteredItems = items.filter((item) => {
+    const isEnded = new Date(item.end_at) < new Date();
+    
+    // 1. 경매 진행 상태별 분기 매칭
+    if (statusTab === 'bidding' && isEnded) return false;
+    if (statusTab === 'ended' && !isEnded) return false;
 
-  // 1. 기본 쿼리 설정: 탭 상태(status)에 따라 마감 필터
-  let supabaseQuery: any;
-  if (status === 'ongoing') {
-    supabaseQuery = supabase.from('items').select('*').gt('end_at', now);
-  } else {
-    supabaseQuery = supabase.from('items').select('*').lte('end_at', now);
-  }
+    // 2. 검색어 텍스트 매칭
+    if (searchQuery.trim() !== '') {
+      const titleMatch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
+      const descMatch = item.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      return titleMatch || descMatch;
+    }
 
-  // 2. 카테고리 & 검색어 필터링
-  if (category && category !== "전체") {
-    supabaseQuery = supabaseQuery.eq("category", category);
-  }
-  if (query) {
-    supabaseQuery = supabaseQuery.or(`title.ilike.%${query}%,user_nickname.ilike.%${query}%`);
-  }
+    return true;
+  });
 
-  // 3. 정렬 조건 분기
-  switch (sort) {
-    case "closing":
-      supabaseQuery = supabaseQuery.order("end_at", { ascending: true });
-      break;
-    case "price_low":
-      supabaseQuery = supabaseQuery.order("price", { ascending: true });
-      break;
-    case "price_high":
-      supabaseQuery = supabaseQuery.order("price", { ascending: false });
-      break;
-    case "bids":
-      supabaseQuery = supabaseQuery.order("bids", { ascending: false });
-      break;
-    case "newest":
-    default:
-      supabaseQuery = supabaseQuery.order("created_at", { ascending: false });
-      break;
-  }
-
-  const { data } = await supabaseQuery;
-  // 🌟 [해결의 열쇠 2] 받아온 데이터를 위에서 정의한 AuctionItem 배열 타입으로 강제 변환
-  const items = (data || []) as AuctionItem[];
-
-  const categories = ["전체", "희귀카드", "전자기기", "스포츠/레저", "패션/잡화", "취미", "기타"];
+  if (loading) return <div className="p-20 text-center font-black text-blue-600 animate-pulse text-lg">가물치 경매장 개장 중... 🎣</div>;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 md:py-12 dark:bg-gray-950 transition-colors duration-200">
+    <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 dark:bg-gray-950 min-h-screen transition-colors duration-200">
       
-      {/* 검색 및 카테고리 헤더 */}
-      <div className="mb-12 space-y-8 text-center">
-        <h1 className="text-5xl font-black text-blue-600 dark:text-blue-400 mb-2 tracking-tighter">GA-MUL-CHI</h1>
-        <p className="text-gray-400 dark:text-gray-500 font-medium font-mono uppercase tracking-widest text-xs">Real-time Auction Platform</p>
-        
-        {/* 검색 폼 내부 상태 유지 보정 */}
-        <form action="/" method="get" className="relative max-w-2xl mx-auto mt-8">
-          <input type="hidden" name="category" value={category} />
-          <input type="hidden" name="sort" value={sort} />
-          <input type="hidden" name="status" value={status} />
+      {/* 🔍 미니멀 전면 검색 바 */}
+      <div className="mb-8 max-w-xl mx-auto">
+        <div className="relative flex items-center bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-3xl p-2 shadow-inner">
+          <span className="pl-3 pr-2 text-gray-400 text-lg">🔍</span>
           <input
             type="text"
-            name="query"
-            defaultValue={query}
-            placeholder="어떤 보물을 낚으러 오셨나요?"
-            className="w-full p-6 pl-14 rounded-[2rem] border-2 border-gray-100 dark:border-gray-700 shadow-xl outline-none focus:border-blue-500 transition-all text-lg bg-gray-50 dark:bg-gray-900 focus:bg-white dark:focus:bg-gray-800 dark:text-white"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="찾으시는 보물이나 포켓몬 카드를 검색하세요!"
+            className="w-full py-2 bg-transparent text-sm font-bold outline-none border-none text-gray-800 dark:text-white"
           />
-          <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl">🔍</span>
-          <button type="submit" className="absolute right-4 top-1/2 -translate-y-1/2 bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 shadow-md transition-all">
-            검색
-          </button>
-        </form>
-
-        {/* 경매 진행 중 / 완료 상태 탭 디자인 */}
-        <div className="flex justify-center mt-6">
-          <div className="inline-flex rounded-2xl bg-gray-100 dark:bg-gray-900 p-1.5 shadow-inner border dark:border-gray-800">
-            <a 
-              href={`/?status=ongoing&category=${category}${query ? `&query=${query}` : ''}&sort=${sort}`} 
-              className={`px-6 py-2.5 rounded-xl text-sm font-black transition-all ${status === 'ongoing' ? 'bg-blue-600 text-white shadow-md scale-102' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
-            >
-              경매 진행 중 🔥
-            </a>
-            <a 
-              href={`/?status=completed&category=${category}${query ? `&query=${query}` : ''}&sort=${sort}`} 
-              className={`px-6 py-2.5 rounded-xl text-sm font-black transition-all ${status === 'completed' ? 'bg-gray-800 dark:bg-gray-700 text-white shadow-md scale-102' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
-            >
-              경매 완료 ⏳
-            </a>
-          </div>
-        </div>
-
-        {/* 카테고리 필터 라인 */}
-        <div className="flex flex-wrap justify-center gap-2 mt-4">
-          {categories.map((cat) => (
-            <a
-              key={cat}
-              href={`/?status=${status}&category=${cat}${query ? `&query=${query}` : ""}&sort=${sort}`}
-              className={`px-5 py-2.5 rounded-full text-xs font-black transition-all border ${
-                category === cat
-                  ? "bg-gray-800 dark:bg-gray-100 text-white dark:text-gray-900 shadow-lg border-transparent"
-                  : "bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-              }`}
-            >
-              {cat}
-            </a>
-          ))}
         </div>
       </div>
 
-      {/* 정렬 및 현황 출력 바 */}
-      <div className="flex justify-between items-center mb-8 border-b-2 border-gray-100 dark:border-gray-800 pb-4 flex-wrap gap-4">
-        <h2 className="text-xl md:text-2xl font-black text-gray-800 dark:text-white">
-          {status === 'ongoing' ? '실시간 경매장' : '과거 낙찰 기록실'} 
-          <span className="text-blue-600 dark:text-blue-400 ml-2">{items.length}</span>
-        </h2>
-        
-        <SortSelect currentSort={sort} />
+      {/* 🧭 경매 상황별 메인 이원화 제어 탭 구역 */}
+      <div className="flex justify-center gap-4 mb-10 border-b border-gray-50 dark:border-gray-800 pb-4">
+        <button
+          onClick={() => setStatusTab('bidding')}
+          className={`px-6 py-2.5 rounded-2xl text-xs font-black tracking-wider transition-all ${
+            statusTab === 'bidding'
+              ? 'bg-blue-600 text-white shadow-md'
+              : 'bg-gray-50 dark:bg-gray-900 text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          진행중인 경매 🔥
+        </button>
+        <button
+          onClick={() => setStatusTab('ended')}
+          className={`px-6 py-2.5 rounded-2xl text-xs font-black tracking-wider transition-all ${
+            statusTab === 'ended'
+              ? 'bg-red-600 text-white shadow-md'
+              : 'bg-gray-50 dark:bg-gray-900 text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          과거 낙찰 기록실 ⏳
+        </button>
       </div>
 
-      {/* 아이템 리스트 출력 */}
-      {items.length === 0 ? (
-        <div className="text-center py-32 bg-gray-50 dark:bg-gray-900 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-gray-800">
-          <span className="text-6xl mb-4 block">🎣</span>
-          <p className="text-xl font-bold text-gray-400 dark:text-gray-500">조건에 맞는 가물치가 없습니다.</p>
-          <a href={`/?status=${status}`} className="text-blue-600 dark:text-blue-400 underline mt-4 inline-block font-bold">전체 필터 초기화</a>
+      {/* 📦 메인 경매품 무한 격자 그리드 */}
+      {filteredItems.length === 0 ? (
+        <div className="text-center py-24 bg-gray-50 dark:bg-gray-900 rounded-[2.5rem] border border-dashed border-gray-200 dark:border-gray-800">
+          <p className="text-sm font-black text-gray-400">조건에 부합하는 가물치 보물이 없습니다. 🎣</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-          {/* 🌟 [해결 완료] 이제 item의 타입을 완벽히 인지하여 ts(7006) 에러가 사라집니다. */}
-          {items.map((item: AuctionItem) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8">
+          {filteredItems.map((item) => (
             <ItemCard key={item.id} item={item} />
           ))}
         </div>

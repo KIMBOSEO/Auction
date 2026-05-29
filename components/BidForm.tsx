@@ -1,106 +1,102 @@
 'use client';
 
-import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
-import { getMinBidAmount } from "@/lib/bidUtils";
+import { useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useRouter } from 'next/navigation';
 
-interface BidFormProps {
-  itemId: string;
-  currentPrice: number;
-  instantlyBuyPrice?: number;
-}
-
-export default function BidForm({ itemId, currentPrice, instantlyBuyPrice }: BidFormProps) {
-  const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState<any>(null);
+export default function BidForm({ itemId, currentPrice, instantlyBuyPrice }: { itemId: string; currentPrice: number; instantlyBuyPrice?: number }) {
   const router = useRouter();
+  const [bidAmount, setBidAmount] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user: u } }) => setUser(u));
-  }, []);
+  // 버튼 클릭 시 정해진 금액만큼 현재가에 더해서 입찰하는 핸들러
+  const handleQuickBid = async (plusAmount: number) => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
 
-  const getAuthToken = async (): Promise<string | null> => {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.access_token ?? null;
-  };
-
-  const callBidAPI = async (payload: object) => {
-    const token = await getAuthToken();
-    if (!token) { alert("인증 토큰을 가져올 수 없습니다. 다시 로그인해주세요."); return null; }
-    const res = await fetch('/api/bid', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ itemId, ...payload }),
-    });
-    return res.json().then(data => ({ ok: res.ok, ...data }));
-  };
-
-  const handleOneClickBid = async () => {
-    if (!user) return alert("로그인이 필요합니다!");
-    const amount = getMinBidAmount(currentPrice);
-    if (!confirm(`₩${amount.toLocaleString()}에 입찰하시겠습니까?`)) return;
-
-    setLoading(true);
     try {
-      const result = await callBidAPI({ amount });
-      if (!result) return;
-      if (!result.ok || result.error) {
-        alert(result.error || '입찰 처리 중 오류가 발생했습니다.');
-      } else {
-        new Audio('/sounds/bid-sound.mp3').play().catch(() => {});
-        alert('입찰 성공! 🎉');
-        router.refresh();
+      // 1. 로그인 유저 세션 정보 및 식별 ID 확보
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        alert('로그인 후 입찰에 참여할 수 있습니다! 🔒');
+        setIsSubmitting(false);
+        return;
       }
-    } catch {
-      alert('네트워크 오류가 발생했습니다. 다시 시도해주세요.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const handleBuyNow = async () => {
-    if (!user) return alert("로그인이 필요합니다!");
-    if (!instantlyBuyPrice) return;
-    if (!confirm(`₩${instantlyBuyPrice.toLocaleString()}에 즉시 구매하시겠습니까?\n\n경매가 즉시 종료되며 되돌릴 수 없습니다.`)) return;
+      // 2. 유저 고유 닉네임 확보
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('nickname')
+        .eq('id', user.id)
+        .single();
+      
+      const userNickname = profile?.nickname || user.email?.split('@')[0] || '익명의 사냥꾼';
+      const targetAmount = currentPrice + plusAmount;
 
-    setLoading(true);
-    try {
-      const result = await callBidAPI({ isBuyNow: true });
-      if (!result) return;
-      if (!result.ok || result.error) {
-        alert(result.error || '즉시 구매 처리 중 오류가 발생했습니다.');
-      } else {
-        alert(`🎉 즉시 구매 완료! 낙찰가: ₩${result.finalPrice?.toLocaleString()}`);
-        router.refresh();
+      // 즉시구매가 방어 로직
+      if (instantlyBuyPrice && targetAmount > instantlyBuyPrice) {
+        alert(`즉시 구매가(₩${instantlyBuyPrice.toLocaleString()}원)를 초과하여 입찰할 수 없습니다.`);
+        setIsSubmitting(false);
+        return;
       }
-    } catch {
-      alert('네트워크 오류가 발생했습니다.');
+
+      // 3. 🚨 [핵심 수정] bids 테이블에 유저 ID와 금액을 명확하게 INSERT 타격
+      const { error: bidError } = await supabase
+        .from('bids')
+        .insert([{
+          item_id: itemId,
+          user_id: user.id,
+          user_nickname: userNickname,
+          amount: targetAmount
+        }]);
+
+      if (bidError) {
+        console.error('입찰 등록 실패:', bidError.message);
+        throw new Error(bidError.message);
+      }
+
+      alert(`🔨 ₩${targetAmount.toLocaleString()}원 입찰 공세 성공!`);
+      setBidAmount('');
+      router.refresh();
+    } catch (err) {
+      alert('입찰 처리 중 오류가 발생했습니다. DB 권한을 확인하세요.');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="space-y-4">
-      <div className="text-sm text-gray-500">다음 유효 입찰가: ₩{getMinBidAmount(currentPrice).toLocaleString()}</div>
-      <button
-        onClick={handleOneClickBid}
-        disabled={loading}
-        className="w-full p-6 rounded-2xl font-black text-xl transition-all shadow-xl active:scale-95 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-      >
-        {loading ? '처리 중...' : '원클릭 입찰하기 🔨'}
-      </button>
-
-      {instantlyBuyPrice && (
+    <div className="w-full space-y-4">
+      <div className="grid grid-cols-3 gap-2">
         <button
-          onClick={handleBuyNow}
-          disabled={loading}
-          className="w-full p-4 rounded-2xl font-black text-lg transition-all border-2 border-green-500 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 active:scale-95 disabled:opacity-50"
+          type="button"
+          disabled={isSubmitting}
+          onClick={() => handleQuickBid(1000)}
+          className="bg-gray-950 hover:bg-blue-600 text-white font-black text-xs py-3 rounded-xl transition-all active:scale-95 disabled:opacity-50"
         >
-          ₩{instantlyBuyPrice.toLocaleString()}에 즉시 구매하기 ⚡
+          + 1천원
         </button>
-      )}
+        <button
+          type="button"
+          disabled={isSubmitting}
+          onClick={() => handleQuickBid(5000)}
+          className="bg-gray-950 hover:bg-blue-600 text-white font-black text-xs py-3 rounded-xl transition-all active:scale-95 disabled:opacity-50"
+        >
+          + 5천원
+        </button>
+        <button
+          type="button"
+          disabled={isSubmitting}
+          onClick={() => handleQuickBid(10000)}
+          className="bg-gray-950 hover:bg-blue-600 text-white font-black text-xs py-3 rounded-xl transition-all active:scale-95 disabled:opacity-50"
+        >
+          + 1만원
+        </button>
+      </div>
+      
+      <div className="text-[10px] text-gray-400 font-bold text-center">
+        ⚠️ 버튼을 누르는 순간 즉시 입찰 조율이 체결됩니다.
+      </div>
     </div>
   );
 }
