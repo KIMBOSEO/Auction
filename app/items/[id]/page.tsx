@@ -18,11 +18,9 @@ export default function ItemDetail() {
   const [item, setItem] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  
-  // 🌟 3번 요구사항: 실시간 동시 조회자 수 상태값
   const [viewerCount, setViewerCount] = useState<number>(1);
 
-  // 🌟 4번 요구사항: 거대 돋보기 조율 스타일
+  // 🌟 1번 요구사항: 300% 돋보기 세팅
   const [zoomStyle, setZoomStyle] = useState<React.CSSProperties>({ display: 'none' });
   const imageContainerRef = useRef<HTMLDivElement>(null);
 
@@ -39,7 +37,6 @@ export default function ItemDetail() {
       }
       setLoading(false);
 
-      // 🌟 [교정 완료] 유저 데이터가 확보된 시점에 프레젠스 채널 트래킹 시작
       const presenceChannel = supabase.channel(`viewers-${id}`, {
         config: { presence: { key: currentUser?.id || 'guest-' + Math.random().toString(36).substr(2, 5) } }
       });
@@ -58,7 +55,7 @@ export default function ItemDetail() {
     
     fetchData();
 
-    // 데이터 실시간 업데이트 싱크 채널
+    // 실시간 아이템 갱신 채널
     const itemChannel = supabase.channel(`item-${id}`).on('postgres_changes', 
       { event: 'UPDATE', schema: 'public', table: 'items', filter: `id=eq.${id}` }, 
       (payload) => setItem(payload.new)
@@ -69,7 +66,7 @@ export default function ItemDetail() {
     };
   }, [id]);
 
-  // 🌟 4번 요구사항: 5배율(500%) 정밀 돋보기 마우스 포인터 정밀 추적 연산
+  // 🌟 1번 요구사항: 300% 정밀 확대 좌표 계산 및 내부 간섭 제거
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!imageContainerRef.current) return;
     const { left, top, width, height } = imageContainerRef.current.getBoundingClientRect();
@@ -80,7 +77,7 @@ export default function ItemDetail() {
       display: 'block',
       backgroundImage: `url(${item?.image_url || item?.image_urls?.[0]})`,
       backgroundPosition: `${x}% ${y}%`,
-      backgroundSize: '500%', // 🚀 5배 확대 세팅 완료!
+      backgroundSize: '300%', // 🚀 뿌요님 의견 수렴: 300% 고정
     });
   };
 
@@ -97,11 +94,10 @@ export default function ItemDetail() {
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 lg:p-12 dark:bg-gray-950 transition-colors duration-200">
       
-      {/* 🌟 3번 요구사항: 상단 실시간 조회 유저수 라이브 배너 */}
       <div className="mb-6 flex justify-end">
-        <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-sm animate-pulse">
-          <span className="w-2.5 h-2.5 rounded-full bg-red-500 block"></span>
-          <span className="text-xs font-black text-red-600 dark:text-red-400">현재 {viewerCount}명의 보물 사냥꾼이 시청 중 👁️</span>
+        <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-sm">
+          <span className="w-2.5 h-2.5 rounded-full bg-red-500 block animate-pulse"></span>
+          <span className="text-xs font-black text-red-600 dark:text-red-400">현재 {viewerCount}명 시청 중 👁️</span>
         </div>
       </div>
 
@@ -109,12 +105,20 @@ export default function ItemDetail() {
         
         {/* [왼쪽 구역] 미디어 플레이어 및 설명문 */}
         <div className="lg:col-span-2 xl:col-span-2 space-y-8 w-full overflow-hidden">
+          
           <div 
             ref={imageContainerRef}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
-            className="relative overflow-hidden rounded-[2.5rem] bg-gray-900 border-4 border-white dark:border-gray-800 shadow-xl group cursor-zoom-in"
+            className="relative overflow-hidden rounded-[2.5rem] bg-gray-900 border-4 border-white dark:border-gray-800 shadow-xl group"
           >
+            {/* 🌟 3번 요구사항: 블러(Blur) 전면 삭제! 선명하게 보여주고 우측 상단 뱃지만 강조 */}
+            {isEnded && (
+              <div className="absolute top-4 right-4 z-40 bg-red-600 text-white text-xs font-black px-4 py-2 rounded-xl shadow-lg uppercase tracking-wider">
+                SOLD OUT ⏳
+              </div>
+            )}
+            
             <ImageGallery 
               itemId={item.id}
               images={item.image_urls || [item.image_url]}
@@ -122,9 +126,10 @@ export default function ItemDetail() {
               isEnded={isEnded}
               onImagesUpdate={(newImages) => setItem({...item, image_urls: newImages, image_url: newImages[0]})}
             />
-            {/* 🌟 4번 요구사항: 500% 정밀 확대 렌더 레이어 */}
+            
+            {/* 🌟 1번 요구사항: pointer-events-none을 걸어 화살표 클릭을 방해하지 않는 돋보기 창 */}
             <div 
-              className="absolute inset-0 pointer-events-none rounded-[2.5rem] hidden lg:block z-30 shadow-2xl border border-white/20"
+              className="absolute inset-0 pointer-events-none rounded-[2.5rem] hidden lg:block z-20 shadow-2xl border border-white/10"
               style={zoomStyle}
             />
           </div>
@@ -177,7 +182,7 @@ export default function ItemDetail() {
             <div className="space-y-4">
               {isOwner ? (
                 <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-blue-600 dark:text-blue-400 text-center text-xs font-black">
-                  본인이 등록한 상품입니다💎
+                  본인이 등록한 보물입니다 💎
                 </div>
               ) : !isEnded ? (
                 <BidForm itemId={item.id} currentPrice={item.price} instantlyBuyPrice={item.instantly_buy_price} />
@@ -189,11 +194,11 @@ export default function ItemDetail() {
             </div>
           </div>
 
-          {/* 🌟 2번 요구사항: 실시간 닉네임이 연동되는 입찰 히스토리 */}
-          <BidHistory itemId={item.id} />
+          {/* 🌟 2번 요구사항: 실시간 입찰 히스토리 정상 출력소 배정 */}
+          <BidHistory itemId={item.id} key={item.price} /> 
         </div>
 
-        {/* 💬 [오른쪽 구역 B] 실시간 채팅방 (뿌요님 기획 정렬 원안 반영) */}
+        {/* 💬 [오른쪽 구역 B] 실시간 채팅방 (판매자 완벽 왼쪽 배치 버전) */}
         <div className="w-full lg:col-span-3 xl:col-span-1">
           <ChatRoom itemId={item.id} userEmail={user?.email} item={item} />
         </div>

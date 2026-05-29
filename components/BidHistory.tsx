@@ -26,9 +26,9 @@ export default function BidHistory({ itemId }: { itemId: string }) {
     };
     fetchBids();
 
-    // 실시간 새 입찰 감지 및 목록 갱신
+    // 🌟 실시간 파이프라인 완벽 동기화 복구
     const channel = supabase
-      .channel(`bids-history-${itemId}`)
+      .channel(`bids-live-history-${itemId}`)
       .on('postgres_changes', 
         { event: 'INSERT', schema: 'public', table: 'bids', filter: `item_id=eq.${itemId}` }, 
         (payload) => {
