@@ -32,40 +32,40 @@ export default function ItemDetail() {
     const fetchData = async () => {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       setUser(currentUser);
+      
       const { data, error } = await supabase.from('items').select('*').eq('id', id).single();
       if (!error && data) {
         setItem(data);
       }
       setLoading(false);
+
+      // 🌟 [교정 완료] 유저 데이터가 확보된 시점에 프레젠스 채널 트래킹 시작
+      const presenceChannel = supabase.channel(`viewers-${id}`, {
+        config: { presence: { key: currentUser?.id || 'guest-' + Math.random().toString(36).substr(2, 5) } }
+      });
+
+      presenceChannel
+        .on('presence', { event: 'sync' }, () => {
+          const state = presenceChannel.presenceState();
+          setViewerCount(Object.keys(state).length);
+        })
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            await presenceChannel.track({ online_at: new Date().toISOString() });
+          }
+        });
     };
+    
     fetchData();
 
-    // 데이터 싱크 채널
+    // 데이터 실시간 업데이트 싱크 채널
     const itemChannel = supabase.channel(`item-${id}`).on('postgres_changes', 
       { event: 'UPDATE', schema: 'public', table: 'items', filter: `id=eq.${id}` }, 
       (payload) => setItem(payload.new)
     ).subscribe();
 
-    // 🌟 3번 요구사항: Supabase Presence 기반 실시간 동시 접속자 트래킹
-    const presenceChannel = supabase.channel(`viewers-${id}`, {
-      config: { presence: { key: currentUser?.id || 'guest-' + Math.random().toString(36).substr(2, 5) } }
-    });
-
-    presenceChannel
-      .on('presence', { event: 'sync' }, () => {
-        const state = presenceChannel.presenceState();
-        // 현재 채널에 물려있는 총 클라이언트 기기 카운트 계산
-        setViewerCount(Object.keys(state).length);
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await presenceChannel.track({ online_at: new Date().toISOString() });
-        }
-      });
-
     return () => { 
       supabase.removeChannel(itemChannel); 
-      supabase.removeChannel(presenceChannel);
     };
   }, [id]);
 
