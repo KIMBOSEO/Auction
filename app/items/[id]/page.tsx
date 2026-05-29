@@ -19,8 +19,12 @@ export default function ItemDetail() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [viewerCount, setViewerCount] = useState<number>(1);
+  
+  // 🌟 5번 요구사항: 판매자 설명 수정 기능 상태값 복구
+  const [isEditing, setIsEditing] = useState(false);
+  const [editDesc, setEditDesc] = useState('');
 
-  // 🌟 1번 요구사항: 300% 돋보기 세팅
+  // 🌟 2번 요구사항: 돋보기 배율 200% 조정 및 마우스 좌표 제어 상태
   const [zoomStyle, setZoomStyle] = useState<React.CSSProperties>({ display: 'none' });
   const imageContainerRef = useRef<HTMLDivElement>(null);
 
@@ -34,9 +38,11 @@ export default function ItemDetail() {
       const { data, error } = await supabase.from('items').select('*').eq('id', id).single();
       if (!error && data) {
         setItem(data);
+        setEditDesc(data.description);
       }
       setLoading(false);
 
+      // 실시간 접속 유저 트래킹 세션
       const presenceChannel = supabase.channel(`viewers-${id}`, {
         config: { presence: { key: currentUser?.id || 'guest-' + Math.random().toString(36).substr(2, 5) } }
       });
@@ -55,18 +61,22 @@ export default function ItemDetail() {
     
     fetchData();
 
-    // 실시간 아이템 갱신 채널
-    const itemChannel = supabase.channel(`item-${id}`).on('postgres_changes', 
-      { event: 'UPDATE', schema: 'public', table: 'items', filter: `id=eq.${id}` }, 
-      (payload) => setItem(payload.new)
-    ).subscribe();
+    // 🌟 3번 요구사항: 입찰 시 현재 최고가 데이터를 실시간 동기화하는 핵심 채널
+    const itemChannel = supabase.channel(`item-live-sync-${id}`)
+      .on('postgres_changes', 
+        { event: 'UPDATE', schema: 'public', table: 'items', filter: `id=eq.${id}` }, 
+        (payload) => {
+          setItem(payload.new);
+        }
+      )
+      .subscribe();
 
     return () => { 
       supabase.removeChannel(itemChannel); 
     };
   }, [id]);
 
-  // 🌟 1번 요구사항: 300% 정밀 확대 좌표 계산 및 내부 간섭 제거
+  // 🌟 2번 요구사항: 마우스 중심 200% 배율 연산 함수
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!imageContainerRef.current) return;
     const { left, top, width, height } = imageContainerRef.current.getBoundingClientRect();
@@ -77,7 +87,7 @@ export default function ItemDetail() {
       display: 'block',
       backgroundImage: `url(${item?.image_url || item?.image_urls?.[0]})`,
       backgroundPosition: `${x}% ${y}%`,
-      backgroundSize: '300%', // 🚀 뿌요님 의견 수렴: 300% 고정
+      backgroundSize: '200%', // 🚀 뿌요님 지시사항: 200%로 배율 하향 안정화
     });
   };
 
@@ -85,7 +95,28 @@ export default function ItemDetail() {
     setZoomStyle({ display: 'none' });
   };
 
-  if (loading) return <div className="p-20 text-center font-black text-blue-600 animate-pulse">가물치 낚는 중...</div>;
+  // 🌟 5번 요구사항: 설명 텍스트 업데이트 핸들러 함수 복구
+  const handleUpdate = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch('/api/items/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id, description: editDesc })
+      });
+      const json = await res.json();
+      if (!res.ok) return alert(json.error || '수정 실패');
+      alert('보물 설명이 깔끔하게 수정되었습니다! ✨');
+      setIsEditing(false);
+      setItem({ ...item, description: editDesc });
+      router.refresh();
+    } catch (err) {
+      alert('수정 중 오류가 발생했습니다.');
+    }
+  };
+
+  if (loading) return <div className="p-20 text-center font-black text-blue-600 animate-pulse">가물치 데이터 분석 중...</div>;
   if (!item) return notFound();
 
   const isEnded = new Date(item.end_at) < new Date();
@@ -94,6 +125,7 @@ export default function ItemDetail() {
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 lg:p-12 dark:bg-gray-950 transition-colors duration-200">
       
+      {/* 동시 시청자 수 트래커 */}
       <div className="mb-6 flex justify-end">
         <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-sm">
           <span className="w-2.5 h-2.5 rounded-full bg-red-500 block animate-pulse"></span>
@@ -103,22 +135,24 @@ export default function ItemDetail() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-8 items-start">
         
-        {/* [왼쪽 구역] 미디어 플레이어 및 설명문 */}
+        {/* [왼쪽 구역] 다중 미디어 플레이어 및 텍스트 본문 */}
         <div className="lg:col-span-2 xl:col-span-2 space-y-8 w-full overflow-hidden">
           
+          {/* 🌟 2번 요구사항: 순수 이미지 영역으로 제한하여 버튼 가림을 방해하지 않는 정격 가두리 양식 */}
           <div 
             ref={imageContainerRef}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
-            className="relative overflow-hidden rounded-[2.5rem] bg-gray-900 border-4 border-white dark:border-gray-800 shadow-xl group"
+            className="relative overflow-hidden rounded-[2.5rem] bg-gray-900 border-4 border-white dark:border-gray-800 shadow-xl"
           >
-            {/* 🌟 3번 요구사항: 블러(Blur) 전면 삭제! 선명하게 보여주고 우측 상단 뱃지만 강조 */}
+            {/* 🌟 4번 요구사항: 블러(Blur)는 완벽 제거, 우측 상단 뱃지만 강조 */}
             {isEnded && (
               <div className="absolute top-4 right-4 z-40 bg-red-600 text-white text-xs font-black px-4 py-2 rounded-xl shadow-lg uppercase tracking-wider">
                 SOLD OUT ⏳
               </div>
             )}
             
+            {/* 사진 추가하기 기능이 정상 작동하도록 간섭 범위를 분리한 이미지 갤러리 */}
             <ImageGallery 
               itemId={item.id}
               images={item.image_urls || [item.image_url]}
@@ -127,9 +161,9 @@ export default function ItemDetail() {
               onImagesUpdate={(newImages) => setItem({...item, image_urls: newImages, image_url: newImages[0]})}
             />
             
-            {/* 🌟 1번 요구사항: pointer-events-none을 걸어 화살표 클릭을 방해하지 않는 돋보기 창 */}
+            {/* 🌟 2번 요구사항: pointer-events-none을 장착하여 화살표 클릭을 방해하지 않는 200% 확대 창 */}
             <div 
-              className="absolute inset-0 pointer-events-none rounded-[2.5rem] hidden lg:block z-20 shadow-2xl border border-white/10"
+              className="absolute inset-0 pointer-events-none rounded-[2.5rem] hidden lg:block z-10 shadow-2xl border border-white/10"
               style={zoomStyle}
             />
           </div>
@@ -140,6 +174,7 @@ export default function ItemDetail() {
             </p>
           </div>
           
+          {/* 상품 정보 및 텍스트 설명 구역 */}
           <div className="bg-white dark:bg-gray-900 p-6 md:p-10 rounded-[2.5rem] shadow-sm border border-gray-50 dark:border-gray-800">
             <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-4 py-1.5 rounded-full text-xs font-black uppercase mb-4 inline-block">{item.category}</span>
             <h2 className="text-3xl md:text-4xl font-black text-gray-900 dark:text-white mb-6 break-all">{item.title}</h2>
@@ -159,11 +194,26 @@ export default function ItemDetail() {
               </div>
             )}
             
-            <p className="text-base md:text-lg text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre-wrap break-all">{item.description}</p>
+            {/* 🌟 5번 요구사항: 판매자 본인일 경우 설명을 실시간 편집할 수 있는 인프라 복구 완료 */}
+            {isEditing ? (
+              <div className="space-y-4">
+                <textarea 
+                  value={editDesc} 
+                  onChange={(e) => setEditDesc(e.target.value)} 
+                  className="w-full p-5 border-2 border-blue-100 dark:border-blue-800 rounded-[2rem] outline-none h-60 font-medium bg-gray-50 dark:bg-gray-800 dark:text-white focus:bg-white dark:focus:bg-gray-700 transition-all resize-none"
+                />
+                <div className="flex gap-3">
+                  <button onClick={handleUpdate} className="flex-1 bg-blue-600 text-white p-4 rounded-2xl font-black hover:bg-blue-700 transition">저장하기</button>
+                  <button onClick={() => setIsEditing(false)} className="px-6 bg-gray-100 dark:bg-gray-800 text-gray-400 p-4 rounded-2xl font-black hover:bg-gray-200 dark:hover:bg-gray-700 transition">취소</button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-base md:text-lg text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre-wrap break-all">{item.description}</p>
+            )}
           </div>
         </div>
 
-        {/* [오른쪽 구역 A] 입찰 폼 및 타이머 */}
+        {/* [오른쪽 구역 A] 타이머 및 원클릭 입찰 스위치 구역 */}
         <div className="space-y-6 w-full">
           <div className="bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border-2 border-blue-600 shadow-xl relative w-full">
             <div className="mb-6">
@@ -181,8 +231,18 @@ export default function ItemDetail() {
 
             <div className="space-y-4">
               {isOwner ? (
-                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-blue-600 dark:text-blue-400 text-center text-xs font-black">
-                  본인이 등록한 보물입니다 💎
+                <div className="space-y-3 pt-2">
+                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-blue-600 dark:text-blue-400 text-center text-xs font-black">
+                    본인이 등록한 보물입니다 💎
+                  </div>
+                  {/* 🌟 5번 요구사항: 판매자가 설명을 마음대로 고칠 수 있는 에디터 모드 전환 버튼 정상 배치 */}
+                  <button 
+                    onClick={() => !isEnded && setIsEditing(true)} 
+                    disabled={isEnded} 
+                    className="w-full p-4 bg-gray-800 dark:bg-gray-700 text-white rounded-2xl font-black text-base hover:bg-black dark:hover:bg-gray-600 transition-all disabled:opacity-30"
+                  >
+                    설명 수정하기 ✍️
+                  </button>
                 </div>
               ) : !isEnded ? (
                 <BidForm itemId={item.id} currentPrice={item.price} instantlyBuyPrice={item.instantly_buy_price} />
@@ -194,11 +254,11 @@ export default function ItemDetail() {
             </div>
           </div>
 
-          {/* 🌟 2번 요구사항: 실시간 입찰 히스토리 정상 출력소 배정 */}
+          {/* 🌟 3번 요구사항: 실시간 입찰 데이터 바인딩 연동용 히스토리 컴포넌트 */}
           <BidHistory itemId={item.id} key={item.price} /> 
         </div>
 
-        {/* 💬 [오른쪽 구역 B] 실시간 채팅방 (판매자 완벽 왼쪽 배치 버전) */}
+        {/* 💬 [오른쪽 구역 B] 실시간 경매 중계방 (카톡형 정렬 완비) */}
         <div className="w-full lg:col-span-3 xl:col-span-1">
           <ChatRoom itemId={item.id} userEmail={user?.email} item={item} />
         </div>
