@@ -15,11 +15,14 @@ export default async function Home(props: Props) {
   const query = searchParams?.query || "";
   const category = searchParams?.category || "전체";
   const sort = searchParams?.sort || "newest";
+  const status = searchParams?.status || 'ongoing'; // 'ongoing' | 'completed'
 
   const now = new Date().toISOString();
 
-  // 1. 기본 쿼리 설정 (마감 안 된 것만)
-  let supabaseQuery = supabase.from("items").select("*").gt("end_at", now);
+  // 1. 기본 쿼리 설정: 탭 상태에 따라 필터
+  let supabaseQuery: any;
+  if (status === 'ongoing') supabaseQuery = supabase.from('items').select('*').gt('end_at', now);
+  else supabaseQuery = supabase.from('items').select('*').lte('end_at', now);
 
   // 2. 카테고리 & 검색어 필터링
   if (category && category !== "전체") {
@@ -78,6 +81,12 @@ export default async function Home(props: Props) {
         </form>
 
         <div className="flex flex-wrap justify-center gap-3 mt-8">
+          <div className="absolute left-0 top-full mt-4 w-full flex justify-center">
+            <div className="inline-flex rounded-2xl bg-white/60 p-1 shadow-sm">
+              <a href={`/?status=ongoing&category=${category}${query ? `&query=${query}` : ''}&sort=${sort}`} className={`px-6 py-2 rounded-xl font-black ${status === 'ongoing' ? 'bg-blue-600 text-white' : 'text-gray-500'}`}>경매 진행 중</a>
+              <a href={`/?status=completed&category=${category}${query ? `&query=${query}` : ''}&sort=${sort}`} className={`px-6 py-2 rounded-xl font-black ${status === 'completed' ? 'bg-gray-800 text-white' : 'text-gray-500'}`}>경매 완료</a>
+            </div>
+          </div>
           {categories.map((cat) => (
             <a
               key={cat}

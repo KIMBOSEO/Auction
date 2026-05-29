@@ -52,6 +52,28 @@ export async function POST(request: NextRequest) {
       await db.from('items').update(updateData).eq('id', itemId);
     }
 
+    // 스나이퍼 방지: 경매 마감 3분 이내 입찰 시 연장 로직
+    async function extendIfNeeded() {
+      const { data: latestItem } = await db.from('items').select('end_at, extension_count').eq('id', itemId).single();
+      if (!latestItem) return null;
+      const endAt = new Date(latestItem.end_at);
+      const remainingMs = endAt.getTime() - Date.now();
+      const remainingSec = Math.floor(remainingMs / 1000);
+
+      if (remainingSec <= 180 && (latestItem.extension_count ?? 0) < 10) {
+        const newCount = (latestItem.extension_count ?? 0) + 1;
+        let addMinutes = 1;
+        if (newCount <= 4) addMinutes = 3;
+        else if (newCount <= 8) addMinutes = 2;
+        else addMinutes = 1;
+
+        const newEnd = new Date(endAt.getTime() + addMinutes * 60 * 1000).toISOString();
+        await db.from('items').update({ end_at: newEnd, extension_count: newCount }).eq('id', itemId);
+        return { newEnd, newCount };
+      }
+      return null;
+    }
+
     const hitsBuyNow = (price: number) => !!(item.instantly_buy_price && price >= item.instantly_buy_price);
 
     // ─── 즉시 구매 ───────────────────────────────────────────────────────────
@@ -101,6 +123,7 @@ export async function POST(request: NextRequest) {
           { item_id: itemId, user_email: topOther.user_email, user_nickname: `${topOther.user_nickname}(자동)`, amount: response },
         ]);
         const endNow = hitsBuyNow(response);
+        if (!endNow) await extendIfNeeded();
         await finalizeItem(endNow ? (item.instantly_buy_price as number) : response, endNow);
         return NextResponse.json({ success: false, type: 'autoBidOutbid', finalPrice: response, message: `다른 자동 입찰자가 더 높은 최대가를 보유해 낙찰받지 못했습니다. 현재가: ₩${response.toLocaleString()}` });
 
@@ -122,6 +145,7 @@ export async function POST(request: NextRequest) {
       }
 
       const endNow = hitsBuyNow(initialPrice!);
+      if (!endNow) await extendIfNeeded();
       await finalizeItem(endNow ? (item.instantly_buy_price as number) : initialPrice!, endNow);
       return NextResponse.json({ success: true, type: 'autoBid', finalPrice: initialPrice!, message: `자동 입찰 예약 완료! 현재가 ₩${initialPrice!.toLocaleString()}` });
     }
@@ -166,6 +190,7 @@ export async function POST(request: NextRequest) {
     }
 
     const endNow = hitsBuyNow(finalPrice);
+    if (!endNow) await extendIfNeeded();
     await finalizeItem(endNow ? (item.instantly_buy_price as number) : finalPrice, endNow);
 
     return NextResponse.json({

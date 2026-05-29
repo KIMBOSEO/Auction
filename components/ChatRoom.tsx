@@ -21,6 +21,8 @@ export default function ChatRoom({ itemId, userEmail }: { itemId: string; userEm
   useEffect(() => {
     if (!itemId) return;
 
+    let sellerEmail: string | null = null;
+
     // 1. 내 닉네임 정보 미리 긁어오기
     const getMyNickname = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -31,6 +33,16 @@ export default function ChatRoom({ itemId, userEmail }: { itemId: string; userEm
     };
     getMyNickname();
 
+    // 1.5 상품 업로더(판매자) 이메일 확보 — 판매자 메시지를 왼쪽으로 정렬하기 위함
+    const fetchSeller = async () => {
+      const { data: item } = await supabase.from('items').select('user_id').eq('id', itemId).single();
+      if (item?.user_id) {
+        const { data: profile } = await supabase.from('profiles').select('email').eq('id', item.user_id).single();
+        // profiles.email may be nullable depending on schema; fallback to null
+        sellerEmail = profile?.email ?? null;
+      }
+    };
+    fetchSeller();
     // 2. 기존 채팅 데이터 로드
     const fetchMessages = async () => {
       const { data } = await supabase
@@ -109,15 +121,23 @@ export default function ChatRoom({ itemId, userEmail }: { itemId: string; userEm
           }
 
           // 일반 유저 채팅 UI 디자인
-          const isMe = msg.user_email === userEmail;
+          const isMyMessage = msg.user_email === userEmail;
+          const isSellerMessage = msg.user_email && sellerEmail && msg.user_email === sellerEmail;
+
+          // 카카오톡 스타일: 판매자(업로더)는 왼쪽, 그 외(구매자/참여자)는 오른쪽
+          const alignmentClass = isSellerMessage ? 'items-start' : 'items-end';
+          const bubbleClass = isSellerMessage
+            ? 'bg-white text-gray-800 rounded-tl-none border border-gray-100'
+            : isMyMessage
+            ? 'bg-blue-600 text-white rounded-tr-none'
+            : 'bg-gray-100 text-gray-800 rounded-tr-none';
+
           return (
-            <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+            <div key={msg.id} className={`flex flex-col ${alignmentClass}`}>
               <span className="text-[10px] text-gray-400 font-bold mb-1 px-1">
                 {msg.user_nickname || msg.user_email?.split('@')[0]}
               </span>
-              <div className={`p-4 rounded-[1.5rem] max-w-[80%] text-sm font-medium shadow-sm ${
-                isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none border border-gray-100'
-              }`}>
+              <div className={`p-4 rounded-[1.5rem] max-w-[80%] text-sm font-medium shadow-sm ${bubbleClass}`}>
                 {msg.message}
               </div>
             </div>

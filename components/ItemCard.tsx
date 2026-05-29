@@ -2,9 +2,10 @@ import Link from 'next/link';
 import LikeButton from './LikeButton';
 
 export default function ItemCard({ item }: { item: any }) {
+  const isEnded = item.end_at && new Date(item.end_at) <= new Date();
   return (
     <Link href={`/items/${item.id}`} className="group">
-      <div className="bg-white rounded-[1.5rem] overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300">
+      <div className={`bg-white rounded-[1.5rem] overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 relative ${isEnded ? 'filter blur-sm opacity-80' : ''}`}>
         
         {/* 📸 이미지 컨테이너: 1:1 비율 고정 */}
         <div className="relative aspect-square w-full bg-gray-50 overflow-hidden">
@@ -22,6 +23,10 @@ export default function ItemCard({ item }: { item: any }) {
           <div className="absolute top-3 left-3 bg-white/80 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black text-blue-600 shadow-sm">
             {item.category || '기타'}
           </div>
+
+          {isEnded && (
+            <div className="absolute top-3 right-3 bg-red-600 text-white px-3 py-1 rounded-full text-xs font-black shadow-md">경매 마감</div>
+          )}
         </div>
 
         <div className="p-5">

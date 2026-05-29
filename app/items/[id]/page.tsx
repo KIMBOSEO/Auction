@@ -43,11 +43,22 @@ export default function ItemDetail() {
   }, [id]);
 
   const handleUpdate = async () => {
-    const { error } = await supabase.from('items').update({ description: editDesc }).eq('id', id);
-    if (!error) {
-      alert("설명이 수정되었습니다! ✨");
+    // 서버사이드 가드 경유 업데이트 (마감 상품 수정 차단)
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch('/api/items/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id, description: editDesc })
+      });
+      const json = await res.json();
+      if (!res.ok) return alert(json.error || '수정 실패');
+      alert('설명이 수정되었습니다! ✨');
       setIsEditing(false);
       router.refresh();
+    } catch (err) {
+      alert('수정 중 오류가 발생했습니다.');
     }
   };
 
@@ -141,10 +152,21 @@ export default function ItemDetail() {
               </div>
             )}
             
+            <div className="flex items-center gap-2">
+            <button onClick={async () => {
+              // 공유 버튼: Web Share API 우선, fallback clipboard
+              const url = window.location.href;
+              if (navigator.share) {
+                try { await navigator.share({ title: item.title, text: item.description, url }); return; } catch {}
+              }
+              await navigator.clipboard.writeText(url);
+              alert('링크가 클립보드에 복사되었습니다.');
+            }} className="px-3 py-2 rounded-lg bg-gray-100 text-sm font-bold">공유하기</button>
+
             {isOwner ? (
               <div className="space-y-3">
                 <div className="p-3 bg-blue-50 rounded-xl text-blue-600 text-center text-xs font-bold">본인의 등록 상품입니다</div>
-                <button onClick={() => setIsEditing(true)} className="w-full p-4 bg-gray-800 text-white rounded-2xl font-black text-base hover:bg-black transition-all">설명 수정하기 ✍️</button>
+                <button onClick={() => !isEnded && setIsEditing(true)} disabled={isEnded} className="w-full p-4 bg-gray-800 text-white rounded-2xl font-black text-base hover:bg-black transition-all disabled:opacity-50 disabled:cursor-not-allowed">설명 수정하기 ✍️</button>
                 <button className="w-full p-4 bg-gray-100 text-gray-400 rounded-2xl font-black text-base cursor-not-allowed">기간 연장 (유료 상품)</button>
               </div>
             ) : !isEnded ? (

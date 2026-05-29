@@ -19,6 +19,8 @@ export default function ImageGallery({
   onImagesUpdate 
 }: ImageGalleryProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [zoomActive, setZoomActive] = useState(false);
+  const [zoomPos, setZoomPos] = useState({ x: 50, y: 50 });
   const [isAddingImages, setIsAddingImages] = useState(false);
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -62,16 +64,22 @@ export default function ImageGallery({
 
       if (uploadedUrls.length > 0) {
         const updatedImages = [...displayImages.filter(img => img), ...uploadedUrls];
-        const { error } = await supabase
-          .from('items')
-          .update({ image_urls: updatedImages, image_url: updatedImages[0] })
-          .eq('id', itemId);
-
-        if (!error) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token;
+          const res = await fetch('/api/items/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ id: itemId, image_urls: updatedImages })
+          });
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error || '업데이트 실패');
           alert("이미지가 추가되었습니다! ✨");
           setNewFiles([]);
           setIsAddingImages(false);
           onImagesUpdate?.(updatedImages);
+        } catch (err) {
+          alert('이미지 정보 업데이트에 실패했습니다.');
         }
       }
     } catch (error) {
@@ -93,11 +101,30 @@ export default function ImageGallery({
         )}
         
         {displayImages[currentIndex] ? (
-          <img 
-            src={displayImages[currentIndex]} 
-            alt={`image-${currentIndex}`} 
-            className="w-full h-full object-contain"
-          />
+          <>
+            <a href={displayImages[currentIndex]} target="_blank" rel="noopener noreferrer" className="w-full h-full block">
+              <img 
+                src={displayImages[currentIndex]} 
+                alt={`image-${currentIndex}`} 
+                className="w-full h-full object-contain"
+                onMouseMove={(e) => {
+                  const rect = (e.target as HTMLElement).getBoundingClientRect();
+                  const x = ((e.clientX - rect.left) / rect.width) * 100;
+                  const y = ((e.clientY - rect.top) / rect.height) * 100;
+                  setZoomPos({ x, y });
+                }}
+                onMouseEnter={() => setZoomActive(true)}
+                onMouseLeave={() => setZoomActive(false)}
+              />
+            </a>
+            {/* Zoom preview */}
+            {zoomActive && (
+              <div
+                className="absolute right-6 top-6 w-48 h-48 bg-no-repeat bg-cover rounded-lg border-2 border-white shadow-xl z-20"
+                style={{ backgroundImage: `url(${displayImages[currentIndex]})`, backgroundPosition: `${zoomPos.x}% ${zoomPos.y}%`, backgroundSize: '200%' }}
+              />
+            )}
+          </>
         ) : (
           <div className="text-6xl">🐟</div>
         )}
