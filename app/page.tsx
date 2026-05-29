@@ -1,16 +1,14 @@
 import { supabase } from "@/lib/supabase";
 import ItemCard from "../components/ItemCard";
-import SortSelect from "../components/SortSelect"; // 🌟 새로 만든 컴포넌트 불러오기
+import SortSelect from "../components/SortSelect"; 
 
 export const revalidate = 0; // 실시간 데이터 유지
 
 interface Props {
-  // Next.js 15+: searchParams는 반드시 await 해야 하는 Promise
-  searchParams: Promise<{ query?: string; category?: string; sort?: string }>;
+  searchParams: Promise<{ query?: string; category?: string; sort?: string; status?: string }>;
 }
 
 export default async function Home(props: Props) {
-  // 🌟 BUG FIX: Next.js 15+에서 searchParams는 Promise이므로 await 필요
   const searchParams = await props.searchParams;
   const query = searchParams?.query || "";
   const category = searchParams?.category || "전체";
@@ -19,17 +17,19 @@ export default async function Home(props: Props) {
 
   const now = new Date().toISOString();
 
-  // 1. 기본 쿼리 설정: 탭 상태에 따라 필터
+  // 1. 기본 쿼리 설정: 탭 상태(status)에 따라 마감 필터
   let supabaseQuery: any;
-  if (status === 'ongoing') supabaseQuery = supabase.from('items').select('*').gt('end_at', now);
-  else supabaseQuery = supabase.from('items').select('*').lte('end_at', now);
+  if (status === 'ongoing') {
+    supabaseQuery = supabase.from('items').select('*').gt('end_at', now);
+  } else {
+    supabaseQuery = supabase.from('items').select('*').lte('end_at', now);
+  }
 
   // 2. 카테고리 & 검색어 필터링
   if (category && category !== "전체") {
     supabaseQuery = supabaseQuery.eq("category", category);
   }
   if (query) {
-    // 🌟 제목 또는 판매자 닉네임으로 검색 가능하도록 OR 조건 추가
     supabaseQuery = supabaseQuery.or(`title.ilike.%${query}%,user_nickname.ilike.%${query}%`);
   }
 
@@ -54,19 +54,21 @@ export default async function Home(props: Props) {
   }
 
   const { data: items } = await supabaseQuery;
-  //const categories = ["전체", "전자기기", "스포츠/레저", "패션/잡화", "취미", "희귀카드", "기타"];
-  const categories = ["희귀카드"];
+  const categories = ["전체", "희귀카드", "전자기기", "스포츠/레저", "패션/잡화", "취미", "기타"];
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
+    <div className="max-w-6xl mx-auto px-4 py-8 md:py-12 dark:bg-gray-950 transition-colors duration-200">
+      
       {/* 검색 및 카테고리 헤더 */}
-      <div className="mb-12 space-y-6 text-center">
+      <div className="mb-12 space-y-8 text-center">
         <h1 className="text-5xl font-black text-blue-600 dark:text-blue-400 mb-2 tracking-tighter">GA-MUL-CHI</h1>
         <p className="text-gray-400 dark:text-gray-500 font-medium font-mono uppercase tracking-widest text-xs">Real-time Auction Platform</p>
         
+        {/* 검색 폼 내부 상태 유지 보정 */}
         <form action="/" method="get" className="relative max-w-2xl mx-auto mt-8">
           <input type="hidden" name="category" value={category} />
           <input type="hidden" name="sort" value={sort} />
+          <input type="hidden" name="status" value={status} /> {/* 🌟 검색 시에도 탭 상태 고정 */}
           <input
             type="text"
             name="query"
@@ -80,21 +82,35 @@ export default async function Home(props: Props) {
           </button>
         </form>
 
-        <div className="flex flex-wrap justify-center gap-3 mt-8">
-          <div className="absolute left-0 top-full mt-4 w-full flex justify-center">
-            <div className="inline-flex rounded-2xl bg-white/60 p-1 shadow-sm">
-              <a href={`/?status=ongoing&category=${category}${query ? `&query=${query}` : ''}&sort=${sort}`} className={`px-6 py-2 rounded-xl font-black ${status === 'ongoing' ? 'bg-blue-600 text-white' : 'text-gray-500'}`}>경매 진행 중</a>
-              <a href={`/?status=completed&category=${category}${query ? `&query=${query}` : ''}&sort=${sort}`} className={`px-6 py-2 rounded-xl font-black ${status === 'completed' ? 'bg-gray-800 text-white' : 'text-gray-500'}`}>경매 완료</a>
-            </div>
+        {/* 🌟 [1번 요구사항] 경매 진행 중 / 완료 상태 탭 디자인 (절대 안 깨지게 배치) */}
+        <div className="flex justify-center mt-6">
+          <div className="inline-flex rounded-2xl bg-gray-100 dark:bg-gray-900 p-1.5 shadow-inner border dark:border-gray-800">
+            <a 
+              href={`/?status=ongoing&category=${category}${query ? `&query=${query}` : ''}&sort=${sort}`} 
+              className={`px-6 py-2.5 rounded-xl text-sm font-black transition-all ${status === 'ongoing' ? 'bg-blue-600 text-white shadow-md scale-102' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
+            >
+              경매 진행 중 🔥
+            </a>
+            <a 
+              href={`/?status=completed&category=${category}${query ? `&query=${query}` : ''}&sort=${sort}`} 
+              className={`px-6 py-2.5 rounded-xl text-sm font-black transition-all ${status === 'completed' ? 'bg-gray-800 dark:bg-gray-700 text-white shadow-md scale-102' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
+            >
+              경매 완료 ⏳
+            </a>
           </div>
+        </div>
+
+        {/* 카테고리 필터 라인 */}
+        <div className="flex flex-wrap justify-center gap-2 mt-4">
           {categories.map((cat) => (
             <a
               key={cat}
-              href={`/?category=${cat}${query ? `&query=${query}` : ""}&sort=${sort}`}
-              className={`px-8 py-3 rounded-full font-black transition-all ${
+              /* 🌟 주소창에 status 유실을 방지하도록 싹 다 연결 */
+              href={`/?status=${status}&category=${cat}${query ? `&query=${query}` : ""}&sort=${sort}`}
+              className={`px-5 py-2.5 rounded-full text-xs font-black transition-all border ${
                 category === cat
-                  ? "bg-gray-800 dark:bg-gray-100 text-white dark:text-gray-900 shadow-lg scale-105"
-                  : "bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  ? "bg-gray-800 dark:bg-gray-100 text-white dark:text-gray-900 shadow-lg border-transparent"
+                  : "bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
               }`}
             >
               {cat}
@@ -103,22 +119,22 @@ export default async function Home(props: Props) {
         </div>
       </div>
 
-      {/* 정렬 바 영역 */}
-      <div className="flex justify-between items-center mb-8 border-b-2 border-gray-100 dark:border-gray-800 pb-4">
-        <h2 className="text-2xl font-black text-gray-800 dark:text-white">
-          실시간 경매장 <span className="text-blue-600 dark:text-blue-400 ml-2">{items?.length || 0}</span>
+      {/* 정렬 및 현황 출력 바 */}
+      <div className="flex justify-between items-center mb-8 border-b-2 border-gray-100 dark:border-gray-800 pb-4 flex-wrap gap-4">
+        <h2 className="text-xl md:text-2xl font-black text-gray-800 dark:text-white">
+          {status === 'ongoing' ? '실시간 경매장' : '과거 낙찰 기록실'} 
+          <span className="text-blue-600 dark:text-blue-400 ml-2">{items?.length || 0}</span>
         </h2>
         
-        {/* 🌟 에러 메이커였던 form 대신 깔끔하게 분리된 클라이언트 컴포넌트 배치 */}
         <SortSelect currentSort={sort} />
       </div>
 
-      {/* 아이템 리스트 */}
+      {/* 아이템 리스트 출력 */}
       {!items || items.length === 0 ? (
         <div className="text-center py-32 bg-gray-50 dark:bg-gray-900 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-gray-800">
           <span className="text-6xl mb-4 block">🎣</span>
           <p className="text-xl font-bold text-gray-400 dark:text-gray-500">조건에 맞는 가물치가 없습니다.</p>
-          <a href="/" className="text-blue-600 dark:text-blue-400 underline mt-4 inline-block font-bold">초기화하기</a>
+          <a href={`/?status=${status}`} className="text-blue-600 dark:text-blue-400 underline mt-4 inline-block font-bold">전체 필터 초기화</a>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
