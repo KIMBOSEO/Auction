@@ -269,9 +269,9 @@ export default function ItemDetail() {
 
         {/* 💬 [오른쪽 구역 B] 실시간 경매 중계방 (6번 요구사항 반영 구역) */}
         <div className="w-full lg:col-span-3 xl:col-span-1">
-          <ChatRoom itemId={item.id} userEmail={user?.email} />
+          {/* 🌟 item={item} 이 빠져있지 않은지 꼭 체크! */}
+          <ChatRoom itemId={item.id} userEmail={user?.email} item={item} />
         </div>
-
       </div>
     </div>
   );

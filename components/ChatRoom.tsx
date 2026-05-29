@@ -9,21 +9,23 @@ interface Message {
   user_nickname?: string;
   message: string;
   created_at: string;
-  is_system?: boolean; // 시스템 메시지 구분을 위한 속성
+  is_system?: boolean;
 }
 
-export default function ChatRoom({ itemId, userEmail }: { itemId: string; userEmail?: string }) {
+// 🌟 item 객체 자체를 통째로 넘겨받아 판매자(seller) 정보를 확실하게 인지하게 합니다.
+export default function ChatRoom({ itemId, userEmail, item }: { itemId: string; userEmail?: string; item: any }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [myNickname, setMyNickname] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // 판매자의 이메일 위치 확보 (단일 호환성 포함)
+  const sellerEmail = item?.user_email || item?.email; 
+
   useEffect(() => {
     if (!itemId) return;
 
-    let sellerEmail: string | null = null;
-
-    // 1. 내 닉네임 정보 미리 긁어오기
+    // 1. 내 닉네임 정보 받아오기
     const getMyNickname = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -33,16 +35,6 @@ export default function ChatRoom({ itemId, userEmail }: { itemId: string; userEm
     };
     getMyNickname();
 
-    // 1.5 상품 업로더(판매자) 이메일 확보 — 판매자 메시지를 왼쪽으로 정렬하기 위함
-    const fetchSeller = async () => {
-      const { data: item } = await supabase.from('items').select('user_id').eq('id', itemId).single();
-      if (item?.user_id) {
-        const { data: profile } = await supabase.from('profiles').select('email').eq('id', item.user_id).single();
-        // profiles.email may be nullable depending on schema; fallback to null
-        sellerEmail = profile?.email ?? null;
-      }
-    };
-    fetchSeller();
     // 2. 기존 채팅 데이터 로드
     const fetchMessages = async () => {
       const { data } = await supabase
@@ -54,17 +46,15 @@ export default function ChatRoom({ itemId, userEmail }: { itemId: string; userEm
     };
     fetchMessages();
 
-    // 3. 🌟 실시간 채널 통합 관리 (유저 채팅 + 입찰 시스템 중계)
+    // 3. 실시간 채널 구독
     const channel = supabase
       .channel(`room-${itemId}`)
-      // (A) 유저가 보내는 실시간 일반 메시지 구독
       .on('postgres_changes', 
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `item_id=eq.${itemId}` }, 
         (payload) => {
           setMessages((prev) => [...prev, payload.new as Message]);
         }
       )
-      // (B) 🌟 실시간 입찰(bids) 발생 시 채팅창에 즉시 공지 메시지 인젝션!
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'bids', filter: `item_id=eq.${itemId}` },
         (payload) => {
@@ -83,7 +73,6 @@ export default function ChatRoom({ itemId, userEmail }: { itemId: string; userEm
     return () => { supabase.removeChannel(channel); };
   }, [itemId]);
 
-  // 스크롤 항상 하단 유지
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -95,7 +84,7 @@ export default function ChatRoom({ itemId, userEmail }: { itemId: string; userEm
     const { error } = await supabase.from('messages').insert([{
       item_id: itemId,
       user_email: userEmail,
-      user_nickname: myNickname || userEmail.split('@')[0], // 닉네임 우선 적용
+      user_nickname: myNickname || userEmail.split('@')[0],
       message: input.trim()
     }]);
 
@@ -103,41 +92,42 @@ export default function ChatRoom({ itemId, userEmail }: { itemId: string; userEm
   };
 
   return (
-    <div className="bg-gray-50 border border-gray-100 rounded-[2.5rem] p-6 shadow-sm flex flex-col h-[450px]">
+    <div className="bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2.5rem] p-6 shadow-sm flex flex-col h-[500px] w-full">
       <h3 className="text-sm font-black text-gray-400 uppercase tracking-wider mb-4">실시간 경매 중계방 💬</h3>
       
-      {/* 메시지 출력창 */}
-      <div className="flex-1 overflow-y-auto space-y-3 pr-2 mb-4">
+      {/* 메시지 뷰어 구역 */}
+      <div className="flex-1 overflow-y-auto space-y-4 pr-1 mb-4 scrollbar-thin">
         {messages.map((msg) => {
           if (msg.is_system) {
-            // 📢 시스템 중계 메시지 UI 디자인
             return (
-              <div key={msg.id} className="text-center my-3 animate-bounce">
-                <span className="bg-blue-600 text-white text-xs font-black px-4 py-2 rounded-full shadow-md inline-block">
+              <div key={msg.id} className="text-center my-2">
+                <span className="bg-blue-600 text-white text-[11px] font-black px-4 py-1.5 rounded-full shadow-md inline-block">
                   {msg.message}
                 </span>
               </div>
             );
           }
 
-          // 일반 유저 채팅 UI 디자인
-          const isMyMessage = msg.user_email === userEmail;
-          const isSellerMessage = msg.user_email && sellerEmail && msg.user_email === sellerEmail;
-
-          // 카카오톡 스타일: 판매자(업로더)는 왼쪽, 그 외(구매자/참여자)는 오른쪽
-          const alignmentClass = isSellerMessage ? 'items-start' : 'items-end';
-          const bubbleClass = isSellerMessage
-            ? 'bg-white text-gray-800 rounded-tl-none border border-gray-100'
-            : isMyMessage
-            ? 'bg-blue-600 text-white rounded-tr-none'
-            : 'bg-gray-100 text-gray-800 rounded-tr-none';
-
+          // 🌟 [6번 요구사항 검증 완료] 판매자(업로더) 이메일과 비교하여 위치 정렬
+          const isSeller = msg.user_email && sellerEmail && msg.user_email === sellerEmail;
+          
           return (
-            <div key={msg.id} className={`flex flex-col ${alignmentClass}`}>
-              <span className="text-[10px] text-gray-400 font-bold mb-1 px-1">
-                {msg.user_nickname || msg.user_email?.split('@')[0]}
-              </span>
-              <div className={`p-4 rounded-[1.5rem] max-w-[80%] text-sm font-medium shadow-sm ${bubbleClass}`}>
+            <div key={msg.id} className={`flex flex-col ${isSeller ? 'items-start' : 'items-end'}`}>
+              <div className="flex items-center gap-1.5 mb-1 px-1">
+                <span className="text-[10px] text-gray-400 font-bold">
+                  {msg.user_nickname || msg.user_email?.split('@')[0]}
+                </span>
+                {isSeller && (
+                  <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 text-[9px] font-black px-1.5 py-0.5 rounded">
+                    판매자 👑
+                  </span>
+                )}
+              </div>
+              <div className={`p-4 rounded-[1.5rem] max-w-[85%] text-sm font-medium shadow-sm break-all ${
+                isSeller 
+                  ? 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-100 dark:border-gray-700' 
+                  : 'bg-blue-600 text-white rounded-tr-none'
+              }`}>
                 {msg.message}
               </div>
             </div>
@@ -146,22 +136,22 @@ export default function ChatRoom({ itemId, userEmail }: { itemId: string; userEm
         <div ref={chatEndRef} />
       </div>
 
-      {/* 입력창 (로그인 한 사람만 활성화) */}
+      {/* 대화 입력 폼 */}
       {userEmail ? (
-        <form onSubmit={sendMessage} className="flex gap-2 bg-white p-2 rounded-2xl border-2 border-gray-100 focus-within:border-blue-500 transition-all">
+        <form onSubmit={sendMessage} className="flex gap-2 bg-white dark:bg-gray-800 p-2 rounded-2xl border-2 border-gray-100 dark:border-gray-700 focus-within:border-blue-500 transition-all">
           <input 
             type="text" 
             value={input} 
             onChange={(e) => setInput(e.target.value)}
             placeholder="경매장 사람들과 대화해보세요!"
-            className="flex-1 px-3 py-2 outline-none text-sm font-bold text-gray-700 bg-transparent"
+            className="flex-1 px-3 py-2 outline-none text-sm font-bold text-gray-700 dark:text-gray-200 bg-transparent"
           />
           <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-xs font-black transition-all">
             전송
           </button>
         </form>
       ) : (
-        <div className="text-center text-xs font-bold text-gray-400 bg-gray-100 p-4 rounded-xl">
+        <div className="text-center text-xs font-bold text-gray-400 bg-gray-100 dark:bg-gray-800 p-4 rounded-xl">
           로그인 후 실시간 채팅에 참여할 수 있습니다. 🔒
         </div>
       )}
