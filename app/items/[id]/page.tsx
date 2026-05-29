@@ -68,6 +68,7 @@ export default function ItemDetail() {
   }, [id]);
 
   // 🌟 2번 요구사항: 마우스가 '순수 이미지 면적' 안에서만 놀도록 가두는 초정밀 좌표 마술
+  // 🌟 마우스가 '순수 이미지 면적' 안에서만 놀도록 가두는 초정밀 좌표 마술
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!imageRef.current) return;
     const { left, top, width, height } = imageRef.current.getBoundingClientRect();
@@ -81,11 +82,14 @@ export default function ItemDetail() {
     const x = ((e.clientX - left) / width) * 100;
     const y = ((e.clientY - top) / height) * 100;
     
+    // 🚀 [핵심 수정] 무조건 0번째 이미지가 아니라, 현재 imageRef가 가리키고 있는(화면에 보이는) 실제 이미지 주소를 가져옵니다.
+    const currentImageUrl = imageRef.current.src;
+    
     setZoomStyle({
       display: 'block',
-      backgroundImage: `url(${item?.image_urls?.[0] || item?.image_url})`,
+      backgroundImage: `url(${currentImageUrl})`,
       backgroundPosition: `${x}% ${y}%`,
-      backgroundSize: '200%', // 🚀 뿌요님 컨펌 수렴: 200% 정격 락업
+      backgroundSize: '200%', 
     });
   };
 
