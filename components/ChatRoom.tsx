@@ -18,7 +18,7 @@ export default function ChatRoom({ itemId, userEmail, item }: { itemId: string; 
   const [myNickname, setMyNickname] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // 판매자의 고유 식별 이메일 추적
+  // 판매자의 고유 식별 이메일 확보
   const sellerEmail = item?.user_email || item?.email;
 
   useEffect(() => {
@@ -43,7 +43,6 @@ export default function ChatRoom({ itemId, userEmail, item }: { itemId: string; 
     };
     fetchMessages();
 
-    // 🌟 2번 요구사항: 실시간 구독 수신부 연동 복구
     const channel = supabase
       .channel(`room-realtime-${itemId}`)
       .on('postgres_changes', 
@@ -68,7 +67,6 @@ export default function ChatRoom({ itemId, userEmail, item }: { itemId: string; 
     e.preventDefault();
     if (!input.trim() || !userEmail) return;
 
-    // 🌟 실시간 DB 인서트 릴레이 가동
     const { error } = await supabase.from('messages').insert([{
       item_id: itemId,
       user_email: userEmail,
@@ -83,10 +81,9 @@ export default function ChatRoom({ itemId, userEmail, item }: { itemId: string; 
     <div className="bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-[2.5rem] p-4 md:p-5 flex flex-col h-[480px] w-full overflow-hidden shadow-sm">
       <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3 px-1">실시간 경매 중계방 💬</h3>
       
-      {/* 스크롤 대화 화면창 */}
       <div className="flex-1 overflow-y-auto space-y-3 pr-1 mb-3 scrollbar-none">
         {messages.map((msg) => {
-          // 🌟 2번 요구사항: 판매자(업로더)는 왼쪽, 그 외 일반 유저는 오른쪽 카톡 정렬
+          // 🌟 [뿌요님 기획 원안 핵심 구현] 판매자 이메일 검사하여 참이면 왼쪽, 거짓(구매자 전체)이면 오른쪽
           const isSeller = msg.user_email && sellerEmail && msg.user_email === sellerEmail;
           
           return (
@@ -95,14 +92,24 @@ export default function ChatRoom({ itemId, userEmail, item }: { itemId: string; 
                 <span className="text-[10px] text-gray-400 font-bold">
                   {msg.user_nickname || msg.user_email?.split('@')[0]}
                 </span>
-                {isSeller && (
-                  <span className="bg-blue-600 text-white text-[9px] font-black px-1 rounded">판매자 👑</span>
+                
+                {/* 🌟 1번 요구사항: 눈에 띄는 확실한 역할 구분 표시 명시 */}
+                {isSeller ? (
+                  <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow-sm">
+                    판매자 👑
+                  </span>
+                ) : (
+                  <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 text-[9px] font-black px-1.5 py-0.5 rounded-md">
+                    구매자 🎣
+                  </span>
                 )}
               </div>
+              
+              {/* 말풍선 스타일링 커스텀 */}
               <div className={`p-3 rounded-[1.25rem] max-w-[85%] text-xs font-semibold shadow-xs break-all ${
                 isSeller 
-                  ? 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-200 dark:border-gray-700' 
-                  : 'bg-blue-600 text-white rounded-tr-none'
+                  ? 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none border border-gray-200 dark:border-gray-700' // 판매자: 왼쪽 배치 (흰색)
+                  : 'bg-blue-600 text-white rounded-tr-none' // 구매자: 오른쪽 배치 (파란색)
               }`}>
                 {msg.message}
               </div>
@@ -112,7 +119,6 @@ export default function ChatRoom({ itemId, userEmail, item }: { itemId: string; 
         <div ref={chatEndRef} />
       </div>
 
-      {/* 🌟 3번 요구사항: 모바일에서도 절대로 밀리거나 깨지지 않는 초정밀 하단 입력 바 구역 */}
       {userEmail ? (
         <form onSubmit={sendMessage} className="w-full flex items-center gap-1.5 bg-white dark:bg-gray-800 p-1.5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-inner box-border">
           <input 
@@ -122,10 +128,7 @@ export default function ChatRoom({ itemId, userEmail, item }: { itemId: string; 
             placeholder="경매장 사람들과 대화해보세요!"
             className="flex-1 min-w-0 px-2 py-1.5 text-xs font-bold text-gray-800 dark:text-gray-200 bg-transparent outline-none border-none"
           />
-          <button 
-            type="submit" 
-            className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-black transition-all active:scale-95"
-          >
+          <button type="submit" className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-black transition-all">
             전송
           </button>
         </form>

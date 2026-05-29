@@ -18,40 +18,61 @@ export default function ItemDetail() {
   const [item, setItem] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editDesc, setEditDesc] = useState('');
+  
+  // 🌟 3번 요구사항: 실시간 동시 조회자 수 상태값
+  const [viewerCount, setViewerCount] = useState<number>(1);
 
-  // 🌟 1번 요구사항: 매우 정교한 돋보기 줌인을 위한 픽셀 스타일 제어
+  // 🌟 4번 요구사항: 거대 돋보기 조율 스타일
   const [zoomStyle, setZoomStyle] = useState<React.CSSProperties>({ display: 'none' });
-  const imageRef = useRef<HTMLImageElement>(null);
+  const imageContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!id) return;
+    
     const fetchData = async () => {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       setUser(currentUser);
       const { data, error } = await supabase.from('items').select('*').eq('id', id).single();
       if (!error && data) {
         setItem(data);
-        setEditDesc(data.description);
       }
       setLoading(false);
     };
     fetchData();
 
-    const channel = supabase.channel(`item-${id}`).on('postgres_changes', 
+    // 데이터 싱크 채널
+    const itemChannel = supabase.channel(`item-${id}`).on('postgres_changes', 
       { event: 'UPDATE', schema: 'public', table: 'items', filter: `id=eq.${id}` }, 
       (payload) => setItem(payload.new)
     ).subscribe();
-    return () => { supabase.removeChannel(channel); };
+
+    // 🌟 3번 요구사항: Supabase Presence 기반 실시간 동시 접속자 트래킹
+    const presenceChannel = supabase.channel(`viewers-${id}`, {
+      config: { presence: { key: currentUser?.id || 'guest-' + Math.random().toString(36).substr(2, 5) } }
+    });
+
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => {
+        const state = presenceChannel.presenceState();
+        // 현재 채널에 물려있는 총 클라이언트 기기 카운트 계산
+        setViewerCount(Object.keys(state).length);
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await presenceChannel.track({ online_at: new Date().toISOString() });
+        }
+      });
+
+    return () => { 
+      supabase.removeChannel(itemChannel); 
+      supabase.removeChannel(presenceChannel);
+    };
   }, [id]);
 
-  // 🌟 1번 요구사항: 마우스 중심 정밀 돋보기 좌표 연산 함수
+  // 🌟 4번 요구사항: 5배율(500%) 정밀 돋보기 마우스 포인터 정밀 추적 연산
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!imageRef.current) return;
-    const { left, top, width, height } = imageRef.current.getBoundingClientRect();
-    
-    // 마우스 커서의 이미지 내 상대적 위치 계산 (0% ~ 100%)
+    if (!imageContainerRef.current) return;
+    const { left, top, width, height } = imageContainerRef.current.getBoundingClientRect();
     const x = ((e.clientX - left) / width) * 100;
     const y = ((e.clientY - top) / height) * 100;
     
@@ -59,7 +80,7 @@ export default function ItemDetail() {
       display: 'block',
       backgroundImage: `url(${item?.image_url || item?.image_urls?.[0]})`,
       backgroundPosition: `${x}% ${y}%`,
-      backgroundSize: '300%', // 🚀 더 선명하고 3배 큰 거대 돋보기 화면으로 확장
+      backgroundSize: '500%', // 🚀 5배 확대 세팅 완료!
     });
   };
 
@@ -75,18 +96,25 @@ export default function ItemDetail() {
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 lg:p-12 dark:bg-gray-950 transition-colors duration-200">
+      
+      {/* 🌟 3번 요구사항: 상단 실시간 조회 유저수 라이브 배너 */}
+      <div className="mb-6 flex justify-end">
+        <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-sm animate-pulse">
+          <span className="w-2.5 h-2.5 rounded-full bg-red-500 block"></span>
+          <span className="text-xs font-black text-red-600 dark:text-red-400">현재 {viewerCount}명의 보물 사냥꾼이 시청 중 👁️</span>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-8 items-start">
         
         {/* [왼쪽 구역] 미디어 플레이어 및 설명문 */}
         <div className="lg:col-span-2 xl:col-span-2 space-y-8 w-full overflow-hidden">
-          
-          {/* 돋보기 오버레이를 장착한 부모 컨테이너 */}
           <div 
-            className="relative overflow-hidden rounded-[2.5rem] bg-gray-900 border-4 border-white dark:border-gray-800 shadow-xl group cursor-zoom-in"
+            ref={imageContainerRef}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
+            className="relative overflow-hidden rounded-[2.5rem] bg-gray-900 border-4 border-white dark:border-gray-800 shadow-xl group cursor-zoom-in"
           >
-            {/* 기본 이미지 갤러리 */}
             <ImageGallery 
               itemId={item.id}
               images={item.image_urls || [item.image_url]}
@@ -94,21 +122,19 @@ export default function ItemDetail() {
               isEnded={isEnded}
               onImagesUpdate={(newImages) => setItem({...item, image_urls: newImages, image_url: newImages[0]})}
             />
-            {/* 🌟 1번 요구사항: 마우스 위치 중심의 정교한 돋보기 화면 창 */}
+            {/* 🌟 4번 요구사항: 500% 정밀 확대 렌더 레이어 */}
             <div 
-              className="absolute inset-0 pointer-events-none rounded-[2.5rem] hidden lg:block z-30 shadow-inner border border-white/20"
+              className="absolute inset-0 pointer-events-none rounded-[2.5rem] hidden lg:block z-30 shadow-2xl border border-white/20"
               style={zoomStyle}
             />
           </div>
           
-          {/* 법적 고지문 */}
           <div className="p-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-2xl">
             <p className="text-xs font-bold text-blue-700 dark:text-blue-300 leading-relaxed">
               ⚠️ <strong>법적 고지:</strong> 본 서비스는 경매 중개 플랫폼으로서 경매 과정 및 최종 결과에 대해 어떠한 민형사상 책임도 지지 않으며, 모든 거래는 개인 간의 책임 하에 진행됩니다.
             </p>
           </div>
           
-          {/* 설명 박스 */}
           <div className="bg-white dark:bg-gray-900 p-6 md:p-10 rounded-[2.5rem] shadow-sm border border-gray-50 dark:border-gray-800">
             <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-4 py-1.5 rounded-full text-xs font-black uppercase mb-4 inline-block">{item.category}</span>
             <h2 className="text-3xl md:text-4xl font-black text-gray-900 dark:text-white mb-6 break-all">{item.title}</h2>
@@ -151,7 +177,7 @@ export default function ItemDetail() {
             <div className="space-y-4">
               {isOwner ? (
                 <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-blue-600 dark:text-blue-400 text-center text-xs font-black">
-                  본인이 등록한 상품입니다
+                  본인이 등록한 상품입니다💎
                 </div>
               ) : !isEnded ? (
                 <BidForm itemId={item.id} currentPrice={item.price} instantlyBuyPrice={item.instantly_buy_price} />
@@ -163,12 +189,12 @@ export default function ItemDetail() {
             </div>
           </div>
 
+          {/* 🌟 2번 요구사항: 실시간 닉네임이 연동되는 입찰 히스토리 */}
           <BidHistory itemId={item.id} />
         </div>
 
-        {/* 💬 [오른쪽 구역 B] 실시간 채팅방 (2, 3번 요구사항 완벽 반영) */}
+        {/* 💬 [오른쪽 구역 B] 실시간 채팅방 (뿌요님 기획 정렬 원안 반영) */}
         <div className="w-full lg:col-span-3 xl:col-span-1">
-          {/* 🚀 중요: item={item} 데이터를 꼭 하위로 전송합니다 */}
           <ChatRoom itemId={item.id} userEmail={user?.email} item={item} />
         </div>
 
