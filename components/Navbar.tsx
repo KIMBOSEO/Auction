@@ -57,38 +57,41 @@ export default function Navbar() {
           <span className="text-xl md:text-2xl text-blue-600 dark:text-blue-400 font-black tracking-tighter">GA-MUL-CHI</span>
         </Link>
 
-        {/* 데스크탑 메뉴 */}
-        <div className="hidden md:flex items-center gap-6 font-bold text-gray-600 dark:text-gray-300">
-          <Link href="/create" className="hover:text-blue-600 dark:hover:text-blue-400 transition">물건 올리기</Link>
+        {/* 우측 전체 */}
+        <div className="flex items-center gap-2">
+          {/* 알림: 한 번만 렌더링 (항상 표시) */}
           {user && <NotificationCenter />}
-          <button
-            onClick={toggleTheme}
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-            title={isDark ? '라이트모드로' : '다크모드로'}
-          >
-            {isDark ? '☀️' : '🌙'}
-          </button>
-          {user ? (
-            <div className="flex items-center gap-3">
-              <Link href="/mypage" className="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-5 py-2 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/50 transition">
-                👤 {nickname || '닉네임 미설정'}
-              </Link>
-              <button
-                onClick={handleLogout}
-                className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 text-sm font-bold transition"
-              >
-                로그아웃
-              </button>
-            </div>
-          ) : (
-            <Link href="/login" className="bg-blue-600 text-white px-5 py-2 rounded-full hover:bg-blue-700 shadow-lg shadow-blue-100 dark:shadow-blue-900 transition">로그인</Link>
-          )}
-        </div>
 
-        {/* 모바일 우측: 알림 + 다크모드 + 햄버거 */}
-        <div className="flex md:hidden items-center gap-2">
-          {user && <NotificationCenter />}
-          <button
+          {/* 데스크탑 전용 */}
+          <div className="hidden md:flex items-center gap-4 font-bold text-gray-600 dark:text-gray-300">
+            <Link href="/create" className="hover:text-blue-600 dark:hover:text-blue-400 transition">물건 올리기</Link>
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+              title={isDark ? '라이트모드로' : '다크모드로'}
+            >
+              {isDark ? '☀️' : '🌙'}
+            </button>
+            {user ? (
+              <div className="flex items-center gap-3">
+                <Link href="/mypage" className="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-5 py-2 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/50 transition">
+                  👤 {nickname || '닉네임 미설정'}
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 text-sm font-bold transition"
+                >
+                  로그아웃
+                </button>
+              </div>
+            ) : (
+              <Link href="/login" className="bg-blue-600 text-white px-5 py-2 rounded-full hover:bg-blue-700 shadow-lg shadow-blue-100 dark:shadow-blue-900 transition">로그인</Link>
+            )}
+          </div>
+
+          {/* 모바일 전용: 다크모드 + 햄버거 */}
+          <div className="flex md:hidden items-center gap-1">
+            <button
             onClick={toggleTheme}
             className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition"
           >
@@ -105,6 +108,7 @@ export default function Navbar() {
               <span className={`block h-0.5 bg-gray-700 dark:bg-gray-300 rounded transition-all ${menuOpen ? '-rotate-45 -translate-y-2' : ''}`} />
             </div>
           </button>
+          </div>
         </div>
       </div>
 
