@@ -4,11 +4,14 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import ItemCard from '@/components/ItemCard';
 
+type SortOrder = 'newest' | 'closing' | 'bids' | 'price_low' | 'price_high';
+
 export default function HomePage() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusTab, setStatusTab] = useState<'all' | 'bidding' | 'ended'>('bidding');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
 
   useEffect(() => {
     const fetchAllItems = async () => {
@@ -28,22 +31,28 @@ export default function HomePage() {
   }, []);
 
   // 🌟 [교정 완료] 불필요한 카테고리 필터링 조건을 완전히 도려내고 탭/검색만 남겼습니다.
-  const filteredItems = items.filter((item) => {
-    const isEnded = new Date(item.end_at) < new Date();
-    
-    // 1. 경매 진행 상태별 분기 매칭
-    if (statusTab === 'bidding' && isEnded) return false;
-    if (statusTab === 'ended' && !isEnded) return false;
-
-    // 2. 검색어 텍스트 매칭
-    if (searchQuery.trim() !== '') {
-      const titleMatch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
-      const descMatch = item.description?.toLowerCase().includes(searchQuery.toLowerCase());
-      return titleMatch || descMatch;
-    }
-
-    return true;
-  });
+  const filteredItems = items
+    .filter((item) => {
+      const isEnded = new Date(item.end_at) < new Date();
+      if (statusTab === 'bidding' && isEnded) return false;
+      if (statusTab === 'ended' && !isEnded) return false;
+      if (searchQuery.trim() !== '') {
+        const titleMatch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
+        const descMatch = item.description?.toLowerCase().includes(searchQuery.toLowerCase());
+        return titleMatch || descMatch;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      switch (sortOrder) {
+        case 'newest': return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        case 'closing': return new Date(a.end_at).getTime() - new Date(b.end_at).getTime();
+        case 'bids': return (b.bids || 0) - (a.bids || 0);
+        case 'price_low': return (a.price || 0) - (b.price || 0);
+        case 'price_high': return (b.price || 0) - (a.price || 0);
+        default: return 0;
+      }
+    });
 
   if (loading) return <div className="p-20 text-center font-black text-blue-600 animate-pulse text-lg">가물치 경매장 개장 중... 🎣</div>;
 
@@ -64,28 +73,44 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* 🧭 경매 상황별 메인 이원화 제어 탭 구역 */}
-      <div className="flex justify-center gap-4 mb-10 border-b border-gray-50 dark:border-gray-800 pb-4">
-        <button
-          onClick={() => setStatusTab('bidding')}
-          className={`px-6 py-2.5 rounded-2xl text-xs font-black tracking-wider transition-all ${
-            statusTab === 'bidding'
-              ? 'bg-blue-600 text-white shadow-md'
-              : 'bg-gray-50 dark:bg-gray-900 text-gray-400 hover:text-gray-600'
-          }`}
-        >
-          진행중인 경매 🔥
-        </button>
-        <button
-          onClick={() => setStatusTab('ended')}
-          className={`px-6 py-2.5 rounded-2xl text-xs font-black tracking-wider transition-all ${
-            statusTab === 'ended'
-              ? 'bg-red-600 text-white shadow-md'
-              : 'bg-gray-50 dark:bg-gray-900 text-gray-400 hover:text-gray-600'
-          }`}
-        >
-          과거 낙찰 기록실 ⏳
-        </button>
+      {/* 🧭 탭 + 정렬 */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-10 border-b border-gray-50 dark:border-gray-800 pb-4">
+        <div className="flex gap-3">
+          <button
+            onClick={() => setStatusTab('bidding')}
+            className={`flex-1 sm:flex-none px-4 sm:px-6 py-2.5 rounded-2xl text-xs font-black tracking-wider transition-all ${
+              statusTab === 'bidding'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'bg-gray-50 dark:bg-gray-900 text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            진행중인 경매 🔥
+          </button>
+          <button
+            onClick={() => setStatusTab('ended')}
+            className={`flex-1 sm:flex-none px-4 sm:px-6 py-2.5 rounded-2xl text-xs font-black tracking-wider transition-all ${
+              statusTab === 'ended'
+                ? 'bg-red-600 text-white shadow-md'
+                : 'bg-gray-50 dark:bg-gray-900 text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            과거 낙찰 기록실 ⏳
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-black text-gray-400 uppercase">정렬</span>
+          <select
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+            className="flex-1 sm:flex-none bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 font-bold text-sm text-gray-700 dark:text-gray-300 py-2 px-3 rounded-xl outline-none cursor-pointer hover:border-blue-500 transition-colors"
+          >
+            <option value="newest">최신 등록순 ✨</option>
+            <option value="closing">마감 임박순 ⏳</option>
+            <option value="bids">입찰 많은순 🔥</option>
+            <option value="price_low">현재가 낮은순 📉</option>
+            <option value="price_high">현재가 높은순 📈</option>
+          </select>
+        </div>
       </div>
 
       {/* 📦 메인 경매품 무한 격자 그리드 */}

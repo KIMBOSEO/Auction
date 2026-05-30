@@ -136,7 +136,7 @@ export default function ItemDetail() {
             ref={containerRef}
             onMouseMove={handleMouseMove}
             onMouseLeave={() => setZoomStyle({ display: 'none' })}
-            className="relative overflow-hidden rounded-[2.5rem] bg-gray-900 border-4 border-white dark:border-gray-800 shadow-xl px-12 py-6 flex items-center justify-center group"
+            className="relative overflow-hidden rounded-[2.5rem] bg-gray-900 border-4 border-white dark:border-gray-800 shadow-xl px-4 py-4 md:px-12 md:py-6 flex items-center justify-center group"
           >
             {/* 🌟 4번 요구사항: 블러 전면 박멸 및 오로지 SOLD OUT 솔드아웃 딱지만 상단 배치 */}
             {isEnded && (
